@@ -1,0 +1,18 @@
+# stage 1 (ingestion + eda) + data versioning - what runs today
+requests
+pandas
+pyarrow
+pyyaml
+matplotlib
+numpy
+jupyter
+dvc
+
+# later stages (uncomment as they land):
+# scikit-learn        # stage 2: baseline + models
+# lightgbm            # stage 2: gradient-boosted model
+# mlflow              # stage 2: experiment tracking + model registry
+# fastapi             # stage 3: inference API
+# uvicorn             # stage 3: ASGI server
+# evidently           # stage 4: drift monitoring
+# prefect             # orchestration (or apache-airflow) - tool TBD

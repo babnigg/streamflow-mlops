@@ -1,0 +1,39 @@
+# streamflow-mlops configuration
+# single source of truth for the pipeline - keeps hardcoded values out of the code.
+# every value below was verified against the live APIs on 2026-07-18.
+
+project:
+  name: streamflow-mlops
+  course: "ADSP 32021 - MLOps"
+  team: "Team 3 (Tori, Janvi, Daniel, Saya)"
+
+site:
+  id: "USGS-05532500"          # OGC monitoring-location id
+  usgs_site: "05532500"        # legacy NWIS site number
+  name: "Des Plaines River at Riverside, IL"
+  latitude: 41.8214916666667   # exact, from USGS monitoring-locations
+  longitude: -87.8220361111111
+  drainage_area_sqmi: 630.0
+
+usgs:
+  ogc_base: "https://api.waterdata.usgs.gov/ogcapi/v0"
+  parameter_code: "00060"      # discharge, cubic feet per second
+  statistic_id: "00003"        # daily mean
+  page_size: 10000             # cursor-pagination page size
+
+weather:
+  archive_url: "https://archive-api.open-meteo.com/v1/archive"   # ERA5 reanalysis (history)
+  forecast_url: "https://api.open-meteo.com/v1/forecast"         # for live inference later
+  daily_vars: ["precipitation_sum", "temperature_2m_max", "temperature_2m_min"]
+  timezone: "America/Chicago"
+
+data:
+  start_date: "1944-01-01"     # discharge record starts 1943-10; use full modern span
+  raw_path: "data/raw/streamflow.parquet"
+
+# documents the modeling intent so later stages (features/train) read it from one place.
+target:
+  variable: "next-day mean discharge (cfs)"
+  transform: "log"             # flow spans ~30 -> 3400+ cfs; model in log space
+  metrics: ["nse", "log_rmse"] # Nash-Sutcliffe efficiency + RMSE on log-discharge
+  baseline: "persistence"      # tomorrow = today
