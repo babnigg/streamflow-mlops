@@ -1,0 +1,20 @@
+# python
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+.venv/
+venv/
+env/
+
+# data - tracked by dvc, not git (the .dvc pointer files ARE committed)
+/data/raw/*.parquet
+/data/processed/
+
+# mlflow / later stages
+mlruns/
+*.db
+
+# os / editor
+.DS_Store
+Thumbs.db
+.vscode/
