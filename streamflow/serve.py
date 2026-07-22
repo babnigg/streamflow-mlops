@@ -1,6 +1,6 @@
 """Inference API (FastAPI + Docker). [stub]
 
-Planned: POST /predict -> next-day discharge; model loaded from MLflow registry.
+Planned: POST /predict -> next-day streamflow; model loaded from MLflow registry.
 """
 
 

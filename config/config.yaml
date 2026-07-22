@@ -15,7 +15,7 @@ site:
 
 usgs:
   ogc_base: "https://api.waterdata.usgs.gov/ogcapi/v0"
-  parameter_code: "00060"      # discharge, cfs
+  parameter_code: "00060"      # streamflow, cfs (USGS calls this parameter "discharge")
   statistic_id: "00003"        # daily mean
   page_size: 10000
 
@@ -30,7 +30,7 @@ data:
   raw_path: "data/raw/streamflow.parquet"
 
 target:
-  variable: "next-day mean discharge (cfs)"
+  variable: "next-day mean streamflow (cfs)"
   transform: "log"
   metrics: ["nse", "log_rmse"]
   baseline: "persistence"

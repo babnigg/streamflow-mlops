@@ -21,7 +21,7 @@ Design details: [`docs/architecture.md`](docs/architecture.md).
 
 ## data
 
-- **discharge:** USGS OGC API (`api.waterdata.usgs.gov`), daily mean cfs, ~30k days.
+- **streamflow:** USGS OGC API (`api.waterdata.usgs.gov`), daily mean cfs, ~30k days.
   Rows keep `approval_status` + `last_modified` (USGS revises the provisional tail).
 - **weather:** Open-Meteo ERA5 daily precip/tmax/tmin at the gauge.
 - both public + keyless; the pipeline rebuilds from scratch.

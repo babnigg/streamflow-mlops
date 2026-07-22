@@ -18,10 +18,10 @@ def test_saved_table_schema():
     if not path.exists():
         return
     df = pd.read_parquet(path)
-    expected = {"date", "discharge_cfs", "approval_status", "qualifier",
+    expected = {"date", "streamflow_cfs", "approval_status", "qualifier",
                 "last_modified", "precip_mm", "tmax_c", "tmin_c"}
     assert expected.issubset(df.columns)
-    assert df["discharge_cfs"].isna().sum() == 0
+    assert df["streamflow_cfs"].isna().sum() == 0
 
 
 def test_live_fetch_weather():

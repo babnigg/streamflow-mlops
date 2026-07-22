@@ -1,4 +1,4 @@
-"""Ingest: join USGS daily discharge (OGC API) with Open-Meteo ERA5 weather.
+"""Ingest: join USGS daily streamflow (OGC API) with Open-Meteo ERA5 weather.
 
 Keeps approval_status / qualifier / last_modified per row - USGS revises the
 provisional tail, which is drift we monitor later.
@@ -20,7 +20,7 @@ SESSION.headers.update({"User-Agent": "streamflow-mlops/0.1 (ADSP 32021 coursewo
 
 
 def fetch_usgs_daily(cfg: dict = CONFIG) -> pd.DataFrame:
-    """Full mean-discharge record via cursor pagination."""
+    """Full mean-streamflow record via cursor pagination."""
     u = cfg["usgs"]
     url = f"{u['ogc_base']}/collections/daily/items"
     params = {
@@ -41,7 +41,7 @@ def fetch_usgs_daily(cfg: dict = CONFIG) -> pd.DataFrame:
                 q = ",".join(str(x) for x in q)
             rows.append({
                 "date": p.get("time"),
-                "discharge_cfs": p.get("value"),
+                "streamflow_cfs": p.get("value"),
                 "approval_status": p.get("approval_status"),
                 "qualifier": q,
                 "last_modified": p.get("last_modified"),
@@ -53,7 +53,7 @@ def fetch_usgs_daily(cfg: dict = CONFIG) -> pd.DataFrame:
 
     df = pd.DataFrame(rows)
     df["date"] = pd.to_datetime(df["date"]).dt.tz_localize(None)
-    df["discharge_cfs"] = pd.to_numeric(df["discharge_cfs"], errors="coerce")
+    df["streamflow_cfs"] = pd.to_numeric(df["streamflow_cfs"], errors="coerce")
     df["last_modified"] = pd.to_datetime(df["last_modified"], errors="coerce", utc=True)
     start = pd.to_datetime(cfg["data"]["start_date"])
     return df[df["date"] >= start].sort_values("date").reset_index(drop=True)
@@ -78,7 +78,7 @@ def fetch_weather(start: str, end: str, cfg: dict = CONFIG) -> pd.DataFrame:
 
 
 def build_dataset(cfg: dict = CONFIG) -> pd.DataFrame:
-    print("fetching USGS discharge...")
+    print("fetching USGS streamflow...")
     flow = fetch_usgs_daily(cfg)
     lo, hi = flow["date"].min().date(), flow["date"].max().date()
     print(f"  {len(flow):,} daily values, {lo} -> {hi}")
