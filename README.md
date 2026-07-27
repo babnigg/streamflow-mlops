@@ -37,6 +37,17 @@ jupyter notebook notebooks/01_eda.ipynb
 Data is DVC-tracked: the `.dvc` pointer is committed, the parquet isn't.
 Re-run ingest to rebuild (or `dvc pull` once a shared remote exists).
 
+Feature engineering builds a DVC-tracked feature matrix:
+
+```bash
+python -m streamflow.ingest      # rebuild raw parquet if needed
+python -m streamflow.features    # -> data/features/feature_matrix.parquet
+```
+
+The feature matrix pointer is committed as `data/features/feature_matrix.parquet.dvc`.
+Until a shared DVC remote is configured, teammates should run the feature command
+locally to recreate the parquet.
+
 ## layout
 
 ```
