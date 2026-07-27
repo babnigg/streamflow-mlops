@@ -11,7 +11,7 @@ Daniel, Saya).
 | 1 | ingestion (USGS + Open-Meteo -> daily parquet, 1944-present) | done |
 | 1 | EDA | done |
 | - | DVC data versioning | done |
-| 1 | features | todo |
+| 1 | feature engineering first pass | done |
 | 2 | training + MLflow registry | todo |
 | 2 | orchestration (Prefect/Airflow, TBD) | todo |
 | 3 | FastAPI + Docker deployment | todo |

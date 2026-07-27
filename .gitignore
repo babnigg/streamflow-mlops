@@ -9,6 +9,7 @@ env/
 # data - tracked by dvc, not git (the .dvc pointer files ARE committed)
 /data/raw/*.parquet
 /data/processed/
+/data/features/*.parquet
 
 # mlflow / later stages
 mlruns/

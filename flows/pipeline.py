@@ -3,11 +3,12 @@
 Run:  python -m flows.pipeline
 """
 
-from streamflow import ingest
+from streamflow import features, ingest
 
 STEPS = [
     ("ingest", ingest.build_and_save),
-    # ("features", ...), ("train", ...), ("monitor", ...)
+    ("features", features.build_and_save),
+    # ("train", ...), ("monitor", ...)
 ]
 
 

@@ -1,11 +1,195 @@
-"""Feature matrix. [stub]
+"""Feature matrix for next-day streamflow prediction.
 
-Planned: streamflow lags (t..t-3), 7/30-day rolling means, precip + 3-day sum,
-tmax/tmin, day-of-year sin/cos. Target: log-streamflow shifted -1 day.
+Rows are indexed at day ``t``. Predictors use information available through day
+``t`` and the target is log-transformed streamflow on day ``t + 1``.
 """
 
+from __future__ import annotations
+
+import math
+from pathlib import Path
+
+import numpy as np
 import pandas as pd
 
+from .config import CONFIG, resolve
 
-def build_features(df: pd.DataFrame) -> pd.DataFrame:
-    raise NotImplementedError
+TARGET_COLUMN = "target_log_streamflow_next_day"
+DEFAULT_FLOW_LAGS = (0, 1, 2, 3, 7, 14, 30)
+DEFAULT_ROLLING_WINDOWS = (3, 7, 14, 30)
+DEFAULT_SCALE_EXCLUDE_PREFIXES = ("date", "target")
+
+
+def _require_columns(df: pd.DataFrame, columns: set[str]) -> None:
+    missing = columns.difference(df.columns)
+    if missing:
+        raise ValueError(f"Missing required columns: {sorted(missing)}")
+
+
+def _zscore(series: pd.Series) -> tuple[pd.Series, float, float]:
+    mean = float(series.mean())
+    std = float(series.std(ddof=0))
+    if math.isclose(std, 0.0) or np.isnan(std):
+        return pd.Series(0.0, index=series.index), mean, std
+    return (series - mean) / std, mean, std
+
+
+def build_features(
+    df: pd.DataFrame,
+    *,
+    scale_numeric: bool = False,
+    drop_incomplete: bool = True,
+    max_memory_days: int = 30,
+) -> pd.DataFrame:
+    """Create a first-pass feature matrix for next-day streamflow.
+
+    Parameters
+    ----------
+    df:
+        Raw table produced by ``streamflow.ingest``.
+    scale_numeric:
+        If true, append z-scored ``*_z`` versions of numeric predictor columns.
+        Later training code should fit these statistics on the training split
+        only; this exploratory helper stores the fitted means/stds in
+        ``features.attrs["scaler_params"]`` for transparency.
+    drop_incomplete:
+        Drop rows without enough lag history and the final row without a
+        next-day target.
+    max_memory_days:
+        Upper bound for lag/rolling windows, matching the project idea that an
+        IoT-like device may retain only recent history.
+    """
+
+    required = {"date", "streamflow_cfs", "precip_mm", "tmax_c", "tmin_c"}
+    _require_columns(df, required)
+
+    features = df.copy()
+    features["date"] = pd.to_datetime(features["date"]).dt.tz_localize(None)
+    features = features.sort_values("date").reset_index(drop=True)
+
+    for col in ("streamflow_cfs", "precip_mm", "tmax_c", "tmin_c"):
+        features[col] = pd.to_numeric(features[col], errors="coerce")
+
+    features["target_streamflow_next_day"] = features["streamflow_cfs"].shift(-1)
+    features[TARGET_COLUMN] = np.log1p(features["target_streamflow_next_day"])
+
+    lags = [lag for lag in DEFAULT_FLOW_LAGS if lag <= max_memory_days]
+    for lag in lags:
+        suffix = "t" if lag == 0 else f"lag_{lag}"
+        shifted = features["streamflow_cfs"].shift(lag)
+        features[f"streamflow_{suffix}"] = shifted
+        features[f"log_streamflow_{suffix}"] = np.log1p(shifted)
+
+    rolling_windows = [w for w in DEFAULT_ROLLING_WINDOWS if w <= max_memory_days]
+    for window in rolling_windows:
+        flow_roll = features["streamflow_cfs"].rolling(window=window, min_periods=window)
+        precip_roll = features["precip_mm"].rolling(window=window, min_periods=window)
+        features[f"streamflow_roll_mean_{window}d"] = flow_roll.mean()
+        features[f"streamflow_roll_std_{window}d"] = flow_roll.std()
+        features[f"streamflow_roll_min_{window}d"] = flow_roll.min()
+        features[f"streamflow_roll_max_{window}d"] = flow_roll.max()
+        features[f"precip_sum_{window}d"] = precip_roll.sum()
+        features[f"precip_mean_{window}d"] = precip_roll.mean()
+
+    features["temp_mean_c"] = (features["tmax_c"] + features["tmin_c"]) / 2
+    features["temp_range_c"] = features["tmax_c"] - features["tmin_c"]
+    for window in (7, 30):
+        if window <= max_memory_days:
+            features[f"temp_mean_roll_{window}d"] = (
+                features["temp_mean_c"].rolling(window=window, min_periods=window).mean()
+            )
+
+    day_of_year = features["date"].dt.dayofyear
+    features["day_of_year_sin"] = np.sin(2 * np.pi * day_of_year / 365.25)
+    features["day_of_year_cos"] = np.cos(2 * np.pi * day_of_year / 365.25)
+    features["month"] = features["date"].dt.month
+    features["is_winter_spring"] = features["month"].isin([12, 1, 2, 3, 4]).astype(int)
+
+    if "approval_status" in features.columns:
+        status = features["approval_status"].fillna("Unknown").astype(str)
+        features = pd.concat(
+            [features, pd.get_dummies(status, prefix="approval_status", dtype=int)],
+            axis=1,
+        )
+
+    if "qualifier" in features.columns:
+        qualifier = features["qualifier"].fillna("none").astype(str).str.replace(",", "_", regex=False)
+        features = pd.concat(
+            [features, pd.get_dummies(qualifier, prefix="qualifier", dtype=int)],
+            axis=1,
+        )
+
+    flood_threshold = features["streamflow_cfs"].quantile(0.99)
+    features["is_high_flow_anomaly"] = (features["streamflow_cfs"] >= flood_threshold).astype(int)
+    features.attrs["high_flow_threshold_cfs"] = float(flood_threshold)
+
+    if drop_incomplete:
+        features = features.dropna(subset=_model_columns(features)).reset_index(drop=True)
+
+    feature_columns = _feature_columns(features)
+    features.attrs["feature_columns"] = feature_columns
+    features.attrs["target_column"] = TARGET_COLUMN
+
+    if scale_numeric:
+        scaler_params: dict[str, dict[str, float]] = {}
+        for col in feature_columns:
+            if not pd.api.types.is_numeric_dtype(features[col]):
+                continue
+            if set(features[col].dropna().unique()).issubset({0, 1}):
+                continue
+            z_col = f"{col}_z"
+            features[z_col], mean, std = _zscore(features[col])
+            scaler_params[col] = {"mean": mean, "std": std}
+        features.attrs["scaler_params"] = scaler_params
+        features.attrs["scaled_feature_columns"] = [
+            f"{col}_z" if col in scaler_params else col for col in feature_columns
+        ]
+
+    return features
+
+
+def _model_columns(df: pd.DataFrame) -> list[str]:
+    return [TARGET_COLUMN, *_feature_columns(df)]
+
+
+def _feature_columns(df: pd.DataFrame) -> list[str]:
+    excluded = {
+        "date",
+        "streamflow_cfs",
+        "target_streamflow_next_day",
+        TARGET_COLUMN,
+        "approval_status",
+        "qualifier",
+        "last_modified",
+    }
+    return [
+        col
+        for col in df.columns
+        if col not in excluded and not col.endswith("_z") and pd.api.types.is_numeric_dtype(df[col])
+    ]
+
+
+def build_and_save(
+    raw_path: str | Path | None = None,
+    out_path: str | Path = "data/features/feature_matrix.parquet",
+    *,
+    scale_numeric: bool = False,
+) -> pd.DataFrame:
+    """Build features from the raw parquet and save a feature matrix."""
+
+    source = Path(raw_path) if raw_path is not None else resolve(CONFIG["data"]["raw_path"])
+    output = Path(out_path)
+    if not output.is_absolute():
+        output = resolve(str(output))
+
+    raw = pd.read_parquet(source)
+    features = build_features(raw, scale_numeric=scale_numeric)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    features.to_parquet(output, index=False)
+    print(f"saved {len(features):,} feature rows -> {output}")
+    print(f"target: {TARGET_COLUMN} | features: {len(features.attrs['feature_columns'])}")
+    return features
+
+
+if __name__ == "__main__":
+    build_and_save(scale_numeric=True)
