@@ -24,8 +24,11 @@ def test_build_features_next_day_target_and_lags():
     assert "streamflow_lag_30" in features.columns
     assert "streamflow_roll_mean_30d" in features.columns
     assert "precip_sum_3d" in features.columns
-    assert "approval_status_Approved" in features.columns
-    assert "qualifier_none" in features.columns
+    assert "is_winter_spring" not in features.columns
+    assert "approval_status_Approved" not in features.columns
+    assert "qualifier_none" not in features.columns
+    assert not any(col.startswith("approval_status_") for col in features.columns)
+    assert not any(col.startswith("qualifier_") for col in features.columns)
     assert features[TARGET_COLUMN].isna().sum() == 0
 
     first = features.iloc[0]
@@ -34,10 +37,10 @@ def test_build_features_next_day_target_and_lags():
     assert first["target_streamflow_next_day"] == 131
 
 
-def test_build_features_optional_scaling_metadata():
-    features = build_features(_sample_raw(), scale_numeric=True)
+def test_build_features_does_not_zscore_for_xgboost():
+    features = build_features(_sample_raw())
 
-    assert "streamflow_t_z" in features.columns
-    assert "scaler_params" in features.attrs
-    assert "streamflow_t" in features.attrs["scaler_params"]
-    assert "scaled_feature_columns" in features.attrs
+    assert "streamflow_t_z" not in features.columns
+    assert not any(col.endswith("_z") for col in features.columns)
+    assert "scaler_params" not in features.attrs
+    assert "scaled_feature_columns" not in features.attrs
