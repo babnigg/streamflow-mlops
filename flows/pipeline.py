@@ -1,22 +1,24 @@
-"""Prefect orchestration for the streamflow pipeline: ingest -> features -> train.
-Run:  python -m flows.pipeline
-"""
-
 from prefect import flow, task
 
 from streamflow.ingest import build_and_save as ingest_build_and_save
 from streamflow.features import build_and_save as features_build_and_save
 from streamflow.train import main as train_main
 from streamflow.tune import main as tune_main
+from streamflow.validate import validate as validate_data
 from streamflow.config import CONFIG
 
 # ---------------------------------------------------------------------------
-# Daily pipeline: ingest -> features -> train (uses existing best_params.yaml)
+# Daily pipeline: ingest -> data check -> features -> train (uses existing best_params.yaml)
 # ---------------------------------------------------------------------------
 
 @task(retries=2, retry_delay_seconds=60, log_prints=True)
 def ingest_task():
     return ingest_build_and_save(CONFIG)
+
+@task(log_prints=True)
+def data_check_task(raw_df):
+    validate_data(raw_df)
+    return raw_df  # pass through unchanged if checks pass
 
 @task(log_prints=True)
 def features_task(raw_df):
@@ -31,7 +33,8 @@ def train_task(feature_df):
 @flow(name="streamflow-daily-pipeline")
 def daily_pipeline():
     raw_df = ingest_task()
-    feature_df = features_task(raw_df)
+    checked_df = data_check_task(raw_df)
+    feature_df = features_task(checked_df)
     run_id = train_task(feature_df)
     print(f"pipeline complete — run: {run_id}")
     return run_id
