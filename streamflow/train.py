@@ -9,7 +9,6 @@ retrain on fresh data with the existing hyperparameters.
 Usage:
     python -m streamflow.train
 """
-
 import yaml
 import mlflow
 import mlflow.xgboost
@@ -45,7 +44,8 @@ def main():
 
     mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
     mlflow.set_experiment(MLFLOW_EXPERIMENT)
-    with mlflow.start_run(run_name="deploy_train"):
+
+    with mlflow.start_run(run_name="deploy_train") as run:
         mlflow.log_params(params)
         mlflow.set_tag("tuning_method", config["method"])
 
@@ -67,7 +67,9 @@ def main():
 
         print(f"test RMSE={rmse:.4f}, MAE={mae:.4f}, NSE={nse:.4f}")
 
-    return model
+        run_id = run.info.run_id
+
+    return model, run_id
 
 
 if __name__ == "__main__":
