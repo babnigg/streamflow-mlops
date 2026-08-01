@@ -25,6 +25,11 @@ MLFLOW_EXPERIMENT = "streamflow_xgboost_deploy"
 
 
 def load_latest_model():
+    """Fetch the most recently logged model from the deploy experiment.
+
+    Raises RuntimeError if no run exists yet -- streamflow.train must be run
+    at least once before predictions are possible.
+    """
     mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
     client = mlflow.tracking.MlflowClient()
 
@@ -52,6 +57,12 @@ def load_latest_model():
 
 
 def latest_feature_row(raw_df: pd.DataFrame) -> pd.DataFrame:
+    """The single most recent row with full lag/rolling history but no target yet.
+
+    build_features with drop_incomplete=False keeps the final row (which has
+    no next-day target, since it hasn't happened) instead of dropping it --
+    that row is exactly what we want to score.
+    """
     features = build_features(raw_df, drop_incomplete=False)
     undetermined = features[features[TARGET_COLUMN].isna()]
     if undetermined.empty:
@@ -60,6 +71,11 @@ def latest_feature_row(raw_df: pd.DataFrame) -> pd.DataFrame:
 
 
 def predict_next_day(raw_df: pd.DataFrame = None) -> dict:
+    """Predict next-day streamflow (cfs) from the latest deployed model.
+
+    raw_df: raw ingested table (as produced by streamflow.ingest). If None,
+    reads the current raw parquet from disk via CONFIG.
+    """
     if raw_df is None:
         raw_df = pd.read_parquet(resolve(CONFIG["data"]["raw_path"]))
 
@@ -83,7 +99,8 @@ def predict_next_day(raw_df: pd.DataFrame = None) -> dict:
 
 
 def main():
-    return predict_next_day()
+    result = predict_next_day()
+    return result
 
 
 if __name__ == "__main__":
