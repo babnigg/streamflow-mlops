@@ -26,7 +26,7 @@ def check_row_count(df: pd.DataFrame, min_rows: int = 1000) -> None:
         raise DataValidationError(f"Only {len(df)} rows ingested (expected at least {min_rows})")
 
 
-def check_data_recency(df: pd.DataFrame, date_col: str = "date", max_staleness_days: int = 3) -> None:
+def check_data_recency(df: pd.DataFrame, date_col: str = "date", max_staleness_days: int = 1) -> None:
     most_recent = pd.to_datetime(df[date_col]).max()
     staleness = pd.Timestamp.now() - most_recent
     if staleness.days > max_staleness_days:
