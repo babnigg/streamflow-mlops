@@ -50,3 +50,15 @@ deployments:
     work_queue_name:
     job_variables: {}
   schedules: []
+- name: manual-retrain
+  version:
+  tags: []
+  concurrency_limit:
+  description:
+  entrypoint: flows/pipeline.py:retrain_flow
+  parameters: {}
+  work_pool:
+    name: default
+    work_queue_name:
+    job_variables: {}
+  schedules: []

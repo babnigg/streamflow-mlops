@@ -5,11 +5,8 @@ from streamflow.features import build_and_save as features_build_and_save
 from streamflow.train import main as train_main
 from streamflow.tune import main as tune_main
 from streamflow.validate import validate as validate_data
+from streamflow.predict import predict_next_day
 from streamflow.config import CONFIG
-
-# ---------------------------------------------------------------------------
-# Daily pipeline: ingest -> data check -> features -> train (uses existing best_params.yaml)
-# ---------------------------------------------------------------------------
 
 @task(retries=2, retry_delay_seconds=60, log_prints=True)
 def ingest_task():
@@ -18,35 +15,38 @@ def ingest_task():
 @task(log_prints=True)
 def data_check_task(raw_df):
     validate_data(raw_df)
-    return raw_df  # pass through unchanged if checks pass
+    return raw_df
 
 @task(log_prints=True)
 def features_task(raw_df):
     return features_build_and_save()
 
 @task(log_prints=True)
-def train_task(feature_df):
-    model, run_id = train_main()
-    print(f"MLflow run: {run_id}")
-    return run_id
+def predict_task(feature_df, raw_df):
+    return predict_next_day(raw_df)
 
 @flow(name="streamflow-daily-pipeline")
 def daily_pipeline():
     raw_df = ingest_task()
     checked_df = data_check_task(raw_df)
     feature_df = features_task(checked_df)
-    run_id = train_task(feature_df)
-    print(f"pipeline complete — run: {run_id}")
+    prediction = predict_task(feature_df, checked_df)
+    print(f"pipeline complete — prediction: {prediction}")
+    return prediction
+
+@task(log_prints=True)
+def train_task():
+    model, run_id = train_main()
+    print(f"MLflow run: {run_id}")
     return run_id
 
-
-# ---------------------------------------------------------------------------
-# Separate tuning flow: run on demand, not on the daily schedule
-# ---------------------------------------------------------------------------
+@flow(name="streamflow-retrain")
+def retrain_flow():
+    train_task()
 
 @task(log_prints=True)
 def tune_task():
-    return tune_main()  # writes config/best_params.yaml when done
+    return tune_main()
 
 @flow(name="streamflow-tuning")
 def tuning_flow():
