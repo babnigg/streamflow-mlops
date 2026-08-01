@@ -5,10 +5,12 @@ from streamflow.features import build_and_save as features_build_and_save
 from streamflow.train import main as train_main
 from streamflow.tune import main as tune_main
 from streamflow.validate import validate as validate_data
+from streamflow.predict import predict_next_day
 from streamflow.config import CONFIG
 
 # ---------------------------------------------------------------------------
-# Daily pipeline: ingest -> data check -> features -> train (uses existing best_params.yaml)
+# Daily pipeline: ingest -> data check -> features -> predict
+# (does NOT retrain -- uses whatever model streamflow.train last produced)
 # ---------------------------------------------------------------------------
 
 @task(retries=2, retry_delay_seconds=60, log_prints=True)
@@ -25,23 +27,39 @@ def features_task(raw_df):
     return features_build_and_save()
 
 @task(log_prints=True)
-def train_task(feature_df):
-    model, run_id = train_main()
-    print(f"MLflow run: {run_id}")
-    return run_id
+def predict_task(feature_df, raw_df):
+    return predict_next_day(raw_df)
 
 @flow(name="streamflow-daily-pipeline")
 def daily_pipeline():
     raw_df = ingest_task()
     checked_df = data_check_task(raw_df)
     feature_df = features_task(checked_df)
-    run_id = train_task(feature_df)
-    print(f"pipeline complete — run: {run_id}")
-    return run_id
+    prediction = predict_task(feature_df, checked_df)
+    print(f"pipeline complete — prediction: {prediction}")
+    return prediction
 
 
 # ---------------------------------------------------------------------------
-# Separate tuning flow: run on demand, not on the daily schedule
+# Separate retrain flow: run on demand, not on the daily schedule.
+# Refits weights on current data using EXISTING hyperparameters
+# (config/best_params.yaml). Does not search hyperparameters -- see tuning_flow.
+# ---------------------------------------------------------------------------
+
+@task(log_prints=True)
+def train_task():
+    model, run_id = train_main()
+    print(f"MLflow run: {run_id}")
+    return run_id
+
+@flow(name="streamflow-retrain")
+def retrain_flow():
+    train_task()
+
+
+# ---------------------------------------------------------------------------
+# Separate tuning flow: run on demand, not on the daily schedule.
+# Full grid/random/Bayesian hyperparameter search, writes best_params.yaml.
 # ---------------------------------------------------------------------------
 
 @task(log_prints=True)
