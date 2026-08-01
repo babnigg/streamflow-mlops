@@ -78,7 +78,7 @@ MLFLOW_EXPERIMENT_PARENT = "streamflow_xgboost_tuning"
 # file store and its sqlite:///mlflow.db default -- that heuristic can miss
 # real data (as it did here) and silently point at an unrelated/incompatible
 # database instead.
-MLFLOW_TRACKING_URI = "file:./mlruns"
+MLFLOW_TRACKING_URI = os.environ.get("MLFLOW_TRACKING_URI", "file:./mlruns")
 TEST_SIZE = 0.15          # most recent 15% of dates held out as the final test set
 PURGE_DAYS = 30           # embargo between train/test, matching the longest lag/rolling window
 BEST_PARAMS_PATH = "config/best_params.yaml"
