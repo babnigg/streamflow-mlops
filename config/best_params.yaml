@@ -1,0 +1,12 @@
+method: bayesian_optuna
+selected_at: '2026-07-31T23:42:40.384705+00:00'
+best_cv_rmse: 0.2931897172579906
+test_rmse: 0.26139341793266574
+params:
+  max_depth: 3
+  min_child_weight: 5
+  subsample: 0.9060585414164009
+  colsample_bytree: 0.8130611589344169
+  reg_lambda: 4.33298189673176
+  learning_rate: 0.06965903808597178
+  n_estimators: 300

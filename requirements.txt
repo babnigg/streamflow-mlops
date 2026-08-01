@@ -7,6 +7,12 @@ matplotlib
 numpy
 jupyter
 dvc
+mlflow==3.13.0
+xgboost==3.3.0
+scikit-learn==1.8.0
+optuna==4.9.0
+optuna-integration[mlflow]==4.9.0
+pytest==9.1.1
 
 # later stages:
 # scikit-learn, lightgbm      # 2: models
