@@ -1,22 +1,27 @@
-# stage 1
+# core pipeline
 requests
 pandas
 pyarrow
 pyyaml
-matplotlib
 numpy
-jupyter
 dvc
+
+# modeling + tracking
 mlflow==3.13.0
 xgboost==3.3.0
 scikit-learn==1.8.0
 optuna==4.9.0
 optuna-integration[mlflow]==4.9.0
-pytest==9.1.1
 
-# later stages:
-# scikit-learn, lightgbm      # 2: models
-# mlflow                      # 2: tracking + registry
-# fastapi, uvicorn            # 3: serving
-# evidently                   # 4: monitoring
-prefect                     # orchestration (or apache-airflow)
+# serving (stage 3)
+fastapi
+uvicorn[standard]
+pydantic
+
+# orchestration
+prefect
+
+# dev / notebooks (not needed in the container - see .dockerignore)
+matplotlib
+jupyter
+pytest==9.1.1

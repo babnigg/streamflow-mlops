@@ -1,10 +1,12 @@
 """Train the deployment XGBoost model.
 
 Uses the hyperparameters streamflow.tune already found to be best
-(config/best_params.yaml) -- no grid/random/Bayesian search here, so this
-runs fast and doesn't depend on optuna. Run streamflow.tune first (or
-whenever you want to re-tune); run this every time you just want to
-retrain on fresh data with the existing hyperparameters.
+(config/best_params.yaml) -- no search here, so this runs fast. Run
+streamflow.tune first (or whenever you want to re-tune); run this every time
+you just want to retrain on fresh data with the existing hyperparameters.
+
+Note: this imports shared helpers from .tune, so optuna must be installed
+even though no search runs here.
 
 Usage:
     python -m streamflow.train

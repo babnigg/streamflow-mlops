@@ -115,6 +115,11 @@ def _feature_columns(df: pd.DataFrame) -> list[str]:
         "approval_status",
         "qualifier",
         "last_modified",
+        # threshold is a full-record quantile, so using it as a predictor leaks the
+        # future into training; it is also recomputed from whatever slice is passed
+        # at serve time, giving the same name two different meanings. Kept as a
+        # column for analysis, excluded from the model.
+        "is_high_flow_anomaly",
     }
     return [
         col

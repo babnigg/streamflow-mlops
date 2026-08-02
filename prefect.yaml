@@ -16,9 +16,9 @@ push:
 
 # pull section allows you to provide instructions for cloning
 # this project in remote locations
+# no pull step: flows run from the repo root wherever it is checked out.
+# (a hardcoded absolute path here breaks on every machine but the one it was written on)
 pull:
-- prefect.deployments.steps.set_working_directory:
-    directory: /workspaces/streamflow-mlops
 
 # the deployments section allows you to provide configuration
 # for deploying flows

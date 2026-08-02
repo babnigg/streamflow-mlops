@@ -1,0 +1,11 @@
+# serving-only dependencies (what the container needs).
+# no optuna / prefect / jupyter - those are for tuning, orchestration and dev.
+fastapi
+uvicorn[standard]
+pydantic
+pandas
+pyarrow
+numpy
+pyyaml
+mlflow==3.13.0
+xgboost==3.3.0
