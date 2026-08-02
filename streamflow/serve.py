@@ -20,10 +20,16 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
 from .config import CONFIG, resolve
-from .features import TARGET_COLUMN, _feature_columns, build_features
+from .features import (
+    DEFAULT_FLOW_LAGS,
+    DEFAULT_ROLLING_WINDOWS,
+    TARGET_COLUMN,
+    _feature_columns,
+    build_features,
+)
 
-# longest lag/rolling window is 30 days, so the newest row needs 30 before it
-MIN_HISTORY_DAYS = 31
+# Tracks features.py: the newest row needs the longest lag/window before it.
+MIN_HISTORY_DAYS = max(*DEFAULT_FLOW_LAGS, *DEFAULT_ROLLING_WINDOWS) + 1
 
 app = FastAPI(
     title="streamflow-mlops",
@@ -53,7 +59,6 @@ def _warm():
         print(f"model not loaded at startup: {e}")
 
 
-# ------------------------------------------------------------------ schemas
 class Observation(BaseModel):
     date: str
     streamflow_cfs: float = Field(ge=0, le=100_000)
@@ -72,7 +77,6 @@ class Prediction(BaseModel):
     model_run_id: str
 
 
-# ------------------------------------------------------------------ routes
 @app.get("/health")
 def health():
     return {"status": "ok", "model_loaded": _MODEL is not None}
@@ -98,7 +102,7 @@ def predict(req: PredictRequest):
     df = pd.DataFrame([o.model_dump() for o in req.observations])
     df["date"] = pd.to_datetime(df["date"])
 
-    # same feature code as training - one definition, no train/serve skew
+    # Same feature code as training - one definition, so no train/serve skew.
     feats = build_features(df, drop_incomplete=False)
     row = feats.iloc[[-1]]
 

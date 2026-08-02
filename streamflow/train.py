@@ -25,10 +25,10 @@ except ImportError:
     def root_mean_squared_error(y_true, y_pred):
         return _mse(y_true, y_pred) ** 0.5
 
-from .config import resolve
-from .tune import load_data, nash_sutcliffe_efficiency, RANDOM_STATE, BEST_PARAMS_PATH, MLFLOW_TRACKING_URI
+from .config import resolve, EXPERIMENT_DEPLOY, MLFLOW_TRACKING_URI
+from .tune import load_data, nash_sutcliffe_efficiency, RANDOM_STATE, BEST_PARAMS_PATH
 
-MLFLOW_EXPERIMENT = "streamflow_xgboost_deploy"
+MLFLOW_EXPERIMENT = EXPERIMENT_DEPLOY
 
 
 def load_best_params(path: str = BEST_PARAMS_PATH) -> dict:

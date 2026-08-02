@@ -19,13 +19,16 @@ def resolve(rel: str) -> Path:
     return REPO_ROOT / rel
 
 
-# Lives here rather than in tune.py so the serving path can reach it without
-# importing the tuning module (and therefore optuna) into the container.
-MLFLOW_TRACKING_URI = os.environ.get("MLFLOW_TRACKING_URI", "file:./mlruns")
-
-# mlflow 3.x refuses a local file store unless this is set. We use one on
-# purpose (no tracking server for a course project), so opt in once here and
-# keep host and container behaving identically.
-os.environ.setdefault("MLFLOW_ALLOW_FILE_STORE", "true")
-
 CONFIG = load_config()
+
+# The serving container must not import the tuning stack, so MLflow settings
+# live here rather than in tune.py. Env var wins: the container points at a mount.
+MLFLOW_TRACKING_URI = os.environ.get(
+    "MLFLOW_TRACKING_URI", CONFIG["mlflow"]["tracking_uri"]
+)
+EXPERIMENT_DEPLOY = CONFIG["mlflow"]["experiment_deploy"]
+EXPERIMENT_TUNE = CONFIG["mlflow"]["experiment_tune"]
+
+# We run MLflow on a file store deliberately - no tracking server to stand up.
+# mlflow 3 requires this opt-in to allow that.
+os.environ.setdefault("MLFLOW_ALLOW_FILE_STORE", "true")

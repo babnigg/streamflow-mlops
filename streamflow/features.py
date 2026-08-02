@@ -115,10 +115,8 @@ def _feature_columns(df: pd.DataFrame) -> list[str]:
         "approval_status",
         "qualifier",
         "last_modified",
-        # threshold is a full-record quantile, so using it as a predictor leaks the
-        # future into training; it is also recomputed from whatever slice is passed
-        # at serve time, giving the same name two different meanings. Kept as a
-        # column for analysis, excluded from the model.
+        # Its threshold is a full-record quantile, so as a predictor it would leak
+        # the future and mean something different at serve time. Analysis only.
         "is_high_flow_anomaly",
     }
     return [
@@ -130,12 +128,12 @@ def _feature_columns(df: pd.DataFrame) -> list[str]:
 
 def build_and_save(
     raw_path: str | Path | None = None,
-    out_path: str | Path = "data/features/feature_matrix.parquet",
+    out_path: str | Path | None = None,
 ) -> pd.DataFrame:
     """Build features from the raw parquet and save a feature matrix."""
 
     source = Path(raw_path) if raw_path is not None else resolve(CONFIG["data"]["raw_path"])
-    output = Path(out_path)
+    output = Path(out_path if out_path is not None else CONFIG["data"]["features_path"])
     if not output.is_absolute():
         output = resolve(str(output))
 

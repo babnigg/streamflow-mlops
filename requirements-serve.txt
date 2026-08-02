@@ -1,5 +1,8 @@
-# serving-only dependencies (what the container needs).
-# no optuna / prefect / jupyter - those are for tuning, orchestration and dev.
+# Inference dependencies only - no optuna, prefect, jupyter or matplotlib.
+# xgboost-cpu:   the default wheel bundles ~400MB of CUDA we never use.
+# mlflow-skinny: tracking client without the server/UI stack.
+# scikit-learn:  the model is an xgboost.sklearn.XGBRegressor, so the wrapper
+#                must be importable to deserialize it.
 fastapi
 uvicorn[standard]
 pydantic
@@ -7,5 +10,6 @@ pandas
 pyarrow
 numpy
 pyyaml
-mlflow==3.13.0
-xgboost==3.3.0
+mlflow-skinny==3.13.0
+xgboost-cpu==3.3.0
+scikit-learn==1.8.0

@@ -27,8 +27,7 @@ def check_row_count(df: pd.DataFrame, min_rows: int = 1000) -> None:
 
 
 def check_data_recency(df: pd.DataFrame, date_col: str = "date", max_staleness_days: int = 3) -> None:
-    # USGS publishes provisional values with a lag, so 1 day is too tight and fails
-    # the flow on normal upstream latency. Compare tz-naive to tz-naive.
+    # USGS publishes provisional values a few days behind real time.
     most_recent = pd.to_datetime(df[date_col]).max().tz_localize(None)
     staleness = pd.Timestamp.now() - most_recent
     if staleness.days > max_staleness_days:

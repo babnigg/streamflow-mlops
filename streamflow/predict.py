@@ -21,10 +21,10 @@ import pandas as pd
 import mlflow
 import mlflow.xgboost
 
-from .config import resolve, CONFIG, MLFLOW_TRACKING_URI
+from .config import resolve, CONFIG, MLFLOW_TRACKING_URI, EXPERIMENT_DEPLOY
 from .features import build_features, TARGET_COLUMN, _feature_columns
 
-MLFLOW_EXPERIMENT = "streamflow_xgboost_deploy"
+MLFLOW_EXPERIMENT = EXPERIMENT_DEPLOY
 
 
 def load_latest_model():
@@ -62,11 +62,10 @@ def load_latest_model():
 def _load_model_for_run(client, experiment, run):
     """Load the model logged by `run`, without trusting MLflow's recorded paths.
 
-    MLflow writes an absolute `artifact_uri` into meta.yaml, so a store created
-    on one machine cannot be read from another (or from inside a container).
-    When the tracking URI is a local directory we therefore rebuild the model
-    path from the root we are actually pointed at. Falls back to the normal
-    `runs:/` lookup for older stores.
+    MLflow records an absolute artifact path, so a store written on one machine
+    is unreadable from another or from inside a container. For a local store we
+    rebuild the path from the root we are pointed at; otherwise fall back to the
+    usual `runs:/` lookup.
     """
     root = MLFLOW_TRACKING_URI
     if root.startswith("file:"):

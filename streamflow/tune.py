@@ -11,11 +11,8 @@ import os
 import time
 from datetime import datetime, timezone
 
-# Opt in to mlflow's filesystem tracking backend (`./mlruns`), which mlflow
-# 3.x deprecated in favor of a database backend but still supports behind
-# this flag. We use the file store deliberately -- no local database setup
-# required -- so this is set here rather than left as an env var every
-# contributor has to remember to export.
+# We use the file store deliberately (no database to stand up), which mlflow 3
+# only allows behind this flag. Set in code so no one has to export it.
 os.environ.setdefault("MLFLOW_ALLOW_FILE_STORE", "true")
 
 import numpy as np
@@ -39,7 +36,7 @@ from sklearn.model_selection import (
 )
 from sklearn.metrics import mean_absolute_error
 
-from .config import resolve
+from .config import resolve, CONFIG, MLFLOW_TRACKING_URI as _TRACKING_URI
 from .features import TARGET_COLUMN, _feature_columns
 try:
     from sklearn.metrics import root_mean_squared_error
@@ -68,20 +65,17 @@ def nash_sutcliffe_efficiency(y_true, y_pred):
 # ---------------------------------------------------------------------------
 # Config
 # ---------------------------------------------------------------------------
-FEATURE_PARQUET = "data/features/feature_matrix.parquet"
+FEATURE_PARQUET = CONFIG["data"]["features_path"]
 N_TRIALS = 40              # trial budget — kept equal across methods for a fair comparison
 CV_FOLDS = 5
 RANDOM_STATE = 42
-MLFLOW_EXPERIMENT_PARENT = "streamflow_xgboost_tuning"
-# Pinned explicitly rather than relying on mlflow's default-URI heuristic,
-# which inspects mlruns/ for an experiment-level meta.yaml to decide between
-# file store and its sqlite:///mlflow.db default -- that heuristic can miss
-# real data (as it did here) and silently point at an unrelated/incompatible
-# database instead.
-MLFLOW_TRACKING_URI = os.environ.get("MLFLOW_TRACKING_URI", "file:./mlruns")
-TEST_SIZE = 0.15          # most recent 15% of dates held out as the final test set
-PURGE_DAYS = 30           # embargo between train/test, matching the longest lag/rolling window
-BEST_PARAMS_PATH = "config/best_params.yaml"
+MLFLOW_EXPERIMENT_PARENT = CONFIG["mlflow"]["experiment_tune"]
+# Pinned explicitly: mlflow's default-URI heuristic can silently pick an empty
+# sqlite database over the file store that actually holds our runs.
+MLFLOW_TRACKING_URI = _TRACKING_URI
+TEST_SIZE = CONFIG["split"]["test_size"]      # most recent share held out as final test set
+PURGE_DAYS = CONFIG["split"]["purge_days"]    # embargo between train/test
+BEST_PARAMS_PATH = CONFIG["mlflow"]["best_params_path"]
 
 
 # ---------------------------------------------------------------------------

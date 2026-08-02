@@ -1,4 +1,4 @@
-# single source of truth. values verified against live APIs 2026-07-18.
+# Single source of truth - modules read from here rather than hardcoding.
 
 project:
   name: streamflow-mlops
@@ -28,6 +28,20 @@ weather:
 data:
   start_date: "1944-01-01"
   raw_path: "data/raw/streamflow.parquet"
+  features_path: "data/features/feature_matrix.parquet"
+
+# tracking_uri is overridden by the MLFLOW_TRACKING_URI env var in the container.
+mlflow:
+  tracking_uri: "file:./mlruns"
+  experiment_deploy: "streamflow_xgboost_deploy"
+  experiment_tune: "streamflow_xgboost_tuning"
+  best_params_path: "config/best_params.yaml"
+
+# Chronological hold-out. purge_days must be >= the longest lag/rolling window
+# in features.py, or train and test share history.
+split:
+  test_size: 0.15
+  purge_days: 30
 
 target:
   variable: "next-day mean streamflow (cfs)"
