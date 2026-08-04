@@ -46,5 +46,10 @@ split:
 target:
   variable: "next-day mean streamflow (cfs)"
   transform: "log"
-  metrics: ["nse", "log_rmse"]
+  # nse is reported for hydrology convention; persistence_index is what we
+  # monitor on - it scores against persistence rather than the observed mean,
+  # so PI < 0 means the model is worse than doing nothing.
+  metrics: ["nse", "persistence_index", "log_rmse"]
   baseline: "persistence"
+  monitor_metric: "persistence_index"
+  monitor_alert_below: 0.0

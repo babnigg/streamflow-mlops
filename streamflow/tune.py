@@ -62,6 +62,38 @@ def nash_sutcliffe_efficiency(y_true, y_pred):
     ss_tot = np.sum((y_true - y_true.mean()) ** 2)
     return 1 - ss_res / ss_tot
 
+
+PERSISTENCE_COLUMN = "log_streamflow_t"   # today's flow, same space as the target
+
+
+def persistence_index(y_true, y_pred, y_persistence):
+    """PI = 1 - SS_res/SS_persistence (Kitanidis & Bras 1980).
+
+    NSE scores against the observed mean, a bar nobody would forecast with, so
+    on an autocorrelated series it flatters the model: here persistence alone
+    scores NSE 0.86. PI scores against persistence itself, so 0 means "adds
+    nothing over doing nothing" and negative means actively worse - a threshold
+    with a decision attached, which is what monitoring needs.
+    """
+    y_true = np.asarray(y_true)
+    ss_res = np.sum((y_true - np.asarray(y_pred)) ** 2)
+    ss_per = np.sum((y_true - np.asarray(y_persistence)) ** 2)
+    if ss_per == 0:                       # flat window: persistence is perfect
+        return float("nan")
+    return 1 - ss_res / ss_per
+
+
+def persistence_index_from_features(y_true, y_pred, X):
+    """PI using today's flow out of the feature frame, NaN if it isn't there.
+
+    Returns NaN rather than raising so a feature set without the persistence
+    column still trains - PI is a reporting/monitoring metric, not a gate on
+    whether a model can be fit.
+    """
+    if PERSISTENCE_COLUMN not in getattr(X, "columns", []):
+        return float("nan")
+    return persistence_index(y_true, y_pred, X[PERSISTENCE_COLUMN])
+
 # ---------------------------------------------------------------------------
 # Config
 # ---------------------------------------------------------------------------
@@ -149,7 +181,7 @@ def compute_convergence(scores):
 # Shared eval helper
 # ---------------------------------------------------------------------------
 def eval_and_log_final_model(params, X_train, y_train, X_test, y_test, run_name, extra_tags=None):
-    """Fit final model with best params on full train set, log to MLflow, return test RMSE/MAE/NSE."""
+    """Fit final model with best params on full train set, log to MLflow, return test RMSE/MAE/NSE/PI."""
     with mlflow.start_run(run_name=run_name, nested=True):
         mlflow.log_params(params)
         if extra_tags:
@@ -167,11 +199,15 @@ def eval_and_log_final_model(params, X_train, y_train, X_test, y_test, run_name,
         rmse = root_mean_squared_error(y_test, preds)
         mae = mean_absolute_error(y_test, preds)
         nse = nash_sutcliffe_efficiency(y_test, preds)
+        pi = persistence_index_from_features(y_test, preds, X_test)
 
-        mlflow.log_metrics({"test_rmse": rmse, "test_mae": mae, "test_nse": nse})
+        metrics = {"test_rmse": rmse, "test_mae": mae, "test_nse": nse}
+        if np.isfinite(pi):
+            metrics["test_pi"] = pi
+        mlflow.log_metrics(metrics)
         mlflow.xgboost.log_model(model, name="model")
 
-        return rmse, mae, nse
+        return rmse, mae, nse, pi
 
 
 # ---------------------------------------------------------------------------
@@ -232,7 +268,7 @@ def run_grid_search(X_train, y_train, X_test, y_test, param_grid=None, base_para
         mlflow.log_metric("best_cv_rmse", -search.best_score_)
 
         best_params = {**search.best_params_, **base_params}
-        test_rmse, mae, nse = eval_and_log_final_model(
+        test_rmse, mae, nse, pi = eval_and_log_final_model(
             best_params, X_train, y_train, X_test, y_test,
             run_name="grid_search_best_model",
         )
@@ -245,6 +281,7 @@ def run_grid_search(X_train, y_train, X_test, y_test, param_grid=None, base_para
             "best_cv_rmse": -search.best_score_,
             "test_rmse": test_rmse,
             "test_nse": nse,
+            "test_pi": pi,
             "time_sec": elapsed,
             "n_trials": len(results["params"]),
             "convergence": convergence,
@@ -306,7 +343,7 @@ def run_random_search(X_train, y_train, X_test, y_test, param_distributions=None
         mlflow.log_metric("best_cv_rmse", -search.best_score_)
 
         best_params = {**search.best_params_, "n_estimators": 300}
-        test_rmse, mae, nse = eval_and_log_final_model(
+        test_rmse, mae, nse, pi = eval_and_log_final_model(
             best_params, X_train, y_train, X_test, y_test,
             run_name="random_search_best_model",
         )
@@ -319,6 +356,7 @@ def run_random_search(X_train, y_train, X_test, y_test, param_distributions=None
             "best_cv_rmse": -search.best_score_,
             "test_rmse": test_rmse,
             "test_nse": nse,
+            "test_pi": pi,
             "time_sec": elapsed,
             "n_trials": n_iter,
             "convergence": convergence,
@@ -387,7 +425,7 @@ def run_bayesian_search(X_train, y_train, X_test, y_test, n_trials=None, cv_fold
         mlflow.log_metric("best_cv_rmse", study.best_value)
 
         best_params = {**study.best_params, "n_estimators": 300}
-        test_rmse, mae, nse = eval_and_log_final_model(
+        test_rmse, mae, nse, pi = eval_and_log_final_model(
             best_params, X_train, y_train, X_test, y_test,
             run_name="bayesian_search_best_model",
         )
@@ -400,6 +438,7 @@ def run_bayesian_search(X_train, y_train, X_test, y_test, n_trials=None, cv_fold
             "best_cv_rmse": study.best_value,
             "test_rmse": test_rmse,
             "test_nse": nse,
+            "test_pi": pi,
             "time_sec": elapsed,
             "n_trials": n_trials,
             "convergence": convergence,
@@ -416,6 +455,7 @@ def summarize(results):
             "best_cv_rmse": r["best_cv_rmse"],
             "test_rmse": r["test_rmse"],
             "test_nse": r["test_nse"],
+            "test_pi": r.get("test_pi", float("nan")),
             "n_trials": r["n_trials"],
             "time_sec": r["time_sec"],
             "rmse_per_trial_efficiency": r["best_cv_rmse"] / r["n_trials"],
@@ -430,6 +470,8 @@ def summarize(results):
             mlflow.log_metric(f"{row['method']}_best_cv_rmse", row["best_cv_rmse"])
             mlflow.log_metric(f"{row['method']}_test_rmse", row["test_rmse"])
             mlflow.log_metric(f"{row['method']}_test_nse", row["test_nse"])
+            if np.isfinite(row["test_pi"]):
+                mlflow.log_metric(f"{row['method']}_test_pi", row["test_pi"])
             mlflow.log_metric(f"{row['method']}_time_sec", row["time_sec"])
         df.to_csv("tuning_comparison.csv", index=False)
         mlflow.log_artifact("tuning_comparison.csv")

@@ -26,7 +26,13 @@ except ImportError:
         return _mse(y_true, y_pred) ** 0.5
 
 from .config import resolve, EXPERIMENT_DEPLOY, MLFLOW_TRACKING_URI
-from .tune import load_data, nash_sutcliffe_efficiency, RANDOM_STATE, BEST_PARAMS_PATH
+from .tune import (
+    BEST_PARAMS_PATH,
+    RANDOM_STATE,
+    load_data,
+    nash_sutcliffe_efficiency,
+    persistence_index_from_features,
+)
 
 MLFLOW_EXPERIMENT = EXPERIMENT_DEPLOY
 
@@ -63,11 +69,14 @@ def main():
         rmse = root_mean_squared_error(y_test, preds)
         mae = mean_absolute_error(y_test, preds)
         nse = nash_sutcliffe_efficiency(y_test, preds)
+        pi = persistence_index_from_features(y_test, preds, X_test)
 
-        mlflow.log_metrics({"test_rmse": rmse, "test_mae": mae, "test_nse": nse})
+        mlflow.log_metrics({"test_rmse": rmse, "test_mae": mae,
+                            "test_nse": nse, "test_pi": pi})
         mlflow.xgboost.log_model(model, name="model")
 
-        print(f"test RMSE={rmse:.4f}, MAE={mae:.4f}, NSE={nse:.4f}")
+        # PI is the one to watch: negative means persistence would beat us.
+        print(f"test RMSE={rmse:.4f}, MAE={mae:.4f}, NSE={nse:.4f}, PI={pi:.4f}")
 
         run_id = run.info.run_id
 
