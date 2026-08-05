@@ -44,3 +44,17 @@ def test_build_features_does_not_zscore_for_xgboost():
     assert not any(col.endswith("_z") for col in features.columns)
     assert "scaler_params" not in features.attrs
     assert "scaled_feature_columns" not in features.attrs
+
+
+def test_persistence_index_reference_points():
+    """PI is anchored at 0 = persistence, which is what makes it a usable alarm."""
+    import numpy as np
+    from streamflow.tune import persistence_index
+
+    obs = np.array([1.0, 2.0, 3.0, 4.0])
+    persistence = np.array([1.2, 1.8, 3.3, 3.7])
+
+    assert persistence_index(obs, obs, persistence) == 1.0            # perfect
+    assert persistence_index(obs, persistence, persistence) == 0.0    # ties persistence
+    assert persistence_index(obs, np.full(4, obs.mean()), persistence) < 0  # worse
+    assert np.isnan(persistence_index(obs, obs, obs))                 # flat window

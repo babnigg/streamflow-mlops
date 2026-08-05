@@ -130,13 +130,15 @@ def test_eval_and_log_final_model_returns_finite_metrics_and_logs_a_run(syntheti
     X_train, X_test, y_train, y_test = synthetic_data
     params = {"max_depth": 3, "n_estimators": 20, "learning_rate": 0.1}
 
-    rmse, mae, nse = mod.eval_and_log_final_model(
+    rmse, mae, nse, pi = mod.eval_and_log_final_model(
         params, X_train, y_train, X_test, y_test, run_name="test_model_run"
     )
 
     assert np.isfinite(rmse) and rmse >= 0
     assert np.isfinite(mae) and mae >= 0
     assert nse <= 1.0  # NSE can be negative for a bad model, but never > 1
+    # this fixture has no persistence column, so PI degrades to NaN rather than raising
+    assert np.isnan(pi)
 
     runs = mlflow.search_runs(
         experiment_names=["test_experiment"],
