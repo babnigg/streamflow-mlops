@@ -6,6 +6,7 @@ from streamflow.train import main as train_main
 from streamflow.tune import main as tune_main
 from streamflow.validate import validate as validate_data
 from streamflow.predict import predict_next_day
+from streamflow.monitor import run as monitor_run
 from streamflow.config import CONFIG
 
 @task(retries=2, retry_delay_seconds=60, log_prints=True)
@@ -31,8 +32,23 @@ def daily_pipeline():
     checked_df = data_check_task(raw_df)
     feature_df = features_task(checked_df)
     prediction = predict_task(feature_df, checked_df)
+    decision = monitor_task(prediction)
+
+    # Only a sustained performance loss retrains. Data-quality failures and
+    # input drift are logged and left alone: retraining cannot fix a broken
+    # feed, and a flood drifts the inputs while the model is still fine.
+    if decision["action"] == "retrain":
+        print(f"retraining: {decision['reason']}")
+        train_task()
+
     print(f"pipeline complete — prediction: {prediction}")
-    return prediction
+    return {"prediction": prediction, "decision": decision}
+
+@task(log_prints=True)
+def monitor_task(prediction):
+    """Score, measure drift, decide. Returns the decision; acting on it is the
+    flow's job, so detection and action stay separable."""
+    return monitor_run()
 
 @task(log_prints=True)
 def train_task():

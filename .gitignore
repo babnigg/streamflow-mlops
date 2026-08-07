@@ -10,6 +10,8 @@ env/
 /data/raw/*.parquet
 /data/processed/
 /data/features/*.parquet
+/data/monitoring/*.parquet
+/reports/*.html
 
 # mlflow / later stages
 mlruns/

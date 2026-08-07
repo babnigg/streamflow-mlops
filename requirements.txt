@@ -18,6 +18,10 @@ fastapi
 uvicorn[standard]
 pydantic
 
+# monitoring (stage 4) - heavy: pulls a web-server stack,
+# so deliberately NOT in requirements-serve.txt
+evidently==0.7.21
+
 # orchestration
 prefect
 

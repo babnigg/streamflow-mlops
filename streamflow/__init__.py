@@ -8,7 +8,7 @@
     train     - fit with best params, log to MLflow               [done]
     predict   - score the latest row with the deployed model      [done]
     serve     - FastAPI inference                                 [done]
-    monitor   - Evidently drift                                   [stub]
+    monitor   - scoring, drift, and the retraining decision       [done]
 """
 
 __version__ = "0.1.0"

@@ -43,6 +43,40 @@ split:
   test_size: 0.15
   purge_days: 30
 
+# Windows are durations so a move to hourly data is a config change. Thresholds
+# are calibrated from a backtest (monitor.calibrate_pi_threshold), not copied
+# from literature - at a different cadence they must be re-derived, not reused.
+monitoring:
+  pi_window_days: 60          # 0/64 non-overlapping blocks fell below 0 over a 10.5y backtest
+  pi_alert_below: 0.0         # PI < 0 = worse than persistence
+  # ML Test Score Monitor 4: a model that is merely old is a known risk even
+  # before performance drops. Retrains are cheap here, so keep this tight.
+  max_model_age_days: 30
+  drift_window_days: 90       # daily cadence: shorter windows are statistically underpowered
+  drift_share: 0.5            # fraction of watched columns that must drift
+  psi_threshold: 0.2          # reported default; per-column alarms use the values below
+  # Calibrated, not borrowed. PSI 0.2 is the textbook cutoff, but on 90-day daily
+  # windows every known-clean historical window exceeded it - streamflow alone
+  # sits near 0.68 in a quiet quarter. These are set above the clean maximum per
+  # column, so an undisturbed window is quiet and a real shift still stands out.
+  # Re-derive with notebooks/05_monitoring (they will tighten at hourly cadence).
+  psi_thresholds:
+    streamflow_t: 1.6
+    precip_mm: 0.5
+    tmax_c: 0.5
+    tmin_c: 1.0
+  # the drift reference is the same season in recent years, not a calendar window:
+  # season fixes "every summer looks drifted", recency avoids comparing against
+  # decades of a different river regime.
+  reference_pad_days: 7
+  reference_years: 10
+  # raw drivers + prediction only. The 48 lag/rolling features are deterministic
+  # transforms of one series, so a single shift registers ~48 times.
+  watch_columns: ["streamflow_t", "precip_mm", "tmax_c", "tmin_c"]
+  predictions_path: "data/monitoring/predictions.parquet"
+  alerts_path: "data/monitoring/alerts.parquet"
+  reports_dir: "reports"
+
 target:
   variable: "next-day mean streamflow (cfs)"
   transform: "log"
@@ -51,5 +85,3 @@ target:
   # so PI < 0 means the model is worse than doing nothing.
   metrics: ["nse", "persistence_index", "log_rmse"]
   baseline: "persistence"
-  monitor_metric: "persistence_index"
-  monitor_alert_below: 0.0
