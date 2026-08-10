@@ -13,6 +13,7 @@ Run locally:  uvicorn streamflow.serve:app --reload
 from __future__ import annotations
 
 import os
+from contextlib import asynccontextmanager
 
 import numpy as np
 import pandas as pd
@@ -23,19 +24,12 @@ from .config import CONFIG, resolve
 from .features import (
     DEFAULT_FLOW_LAGS,
     DEFAULT_ROLLING_WINDOWS,
-    TARGET_COLUMN,
     _feature_columns,
     build_features,
 )
 
 # Tracks features.py: the newest row needs the longest lag/window before it.
 MIN_HISTORY_DAYS = max(*DEFAULT_FLOW_LAGS, *DEFAULT_ROLLING_WINDOWS) + 1
-
-app = FastAPI(
-    title="streamflow-mlops",
-    version="0.1.0",
-    description="Next-day streamflow forecast for USGS gauge 05532500 (Des Plaines River at Riverside, IL).",
-)
 
 _MODEL = None
 _RUN_ID = None
@@ -50,13 +44,25 @@ def _load_model():
     return _MODEL, _RUN_ID
 
 
-@app.on_event("startup")
-def _warm():
+@asynccontextmanager
+async def _lifespan(_app: FastAPI):
+    # warm the model at startup but never fail here: the process must stay up so
+    # /health can report why it is unhealthy
     try:
         _load_model()
         print(f"model loaded: run {_RUN_ID}")
-    except Exception as e:                       # keep serving /health either way
+    except Exception as e:
         print(f"model not loaded at startup: {e}")
+    yield
+
+
+_SITE = CONFIG["site"]
+app = FastAPI(
+    title="streamflow-mlops",
+    version="0.1.0",
+    description=f"Next-day streamflow forecast for {_SITE['usgs_site']} ({_SITE['name']}).",
+    lifespan=_lifespan,
+)
 
 
 class Observation(BaseModel):
@@ -79,7 +85,15 @@ class Prediction(BaseModel):
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "model_loaded": _MODEL is not None}
+    """Liveness AND readiness. 503 without a model, so the container healthcheck
+    fails instead of reporting ok on a service whose every request would 503 -
+    an orchestrator must not route traffic here, and a fresh clone with no
+    trained model should say so rather than look healthy."""
+    try:
+        _, run_id = _load_model()
+    except Exception as e:
+        raise HTTPException(503, f"no model loaded: {e}")
+    return {"status": "ok", "model_loaded": True, "run_id": run_id}
 
 
 @app.get("/model")
