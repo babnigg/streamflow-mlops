@@ -8,8 +8,10 @@ Usage:
 """
 
 import os
+import tempfile
 import time
 from datetime import datetime, timezone
+from pathlib import Path
 
 # We use the file store deliberately (no database to stand up), which mlflow 3
 # only allows behind this flag. Set in code so no one has to export it.
@@ -105,7 +107,7 @@ MLFLOW_EXPERIMENT_PARENT = CONFIG["mlflow"]["experiment_tune"]
 # Pinned explicitly: mlflow's default-URI heuristic can silently pick an empty
 # sqlite database over the file store that actually holds our runs.
 MLFLOW_TRACKING_URI = _TRACKING_URI
-TEST_SIZE = CONFIG["split"]["test_size"]      # most recent share held out as final test set
+TEST_DAYS = CONFIG["split"]["test_days"]      # most recent days held out as final test set
 PURGE_DAYS = CONFIG["split"]["purge_days"]    # embargo between train/test
 BEST_PARAMS_PATH = CONFIG["mlflow"]["best_params_path"]
 
@@ -129,15 +131,19 @@ def ensure_data_pulled():
     features.build_and_save()
 
 
-def load_data(test_size: float = TEST_SIZE, purge_days: int = PURGE_DAYS):
+def load_data(test_days: int = TEST_DAYS, purge_days: int = PURGE_DAYS):
     """Chronological train/test split.
 
     This is a daily time series with lag/rolling-window features, so a random
     split would scatter autocorrelated rows across both sides and inflate
     validation scores. Instead we sort by date, hold out the most recent
-    `test_size` fraction as the test set, and drop a `purge_days` embargo
+    `test_days` days as the test set, and drop a `purge_days` embargo
     immediately before it so no train row sits inside the longest rolling
     window's reach of the test period.
+
+    The hold-out is a fixed number of days, not a fraction: 15% of an 82-year
+    record is a 12-year hold-out, which would leave the deployed model blind to
+    every recent year and make retraining unable to advance the training window.
 
     Note: `feature_columns` is recomputed via `_feature_columns` rather than
     read from `features.attrs["feature_columns"]` — DataFrame `.attrs` does
@@ -147,7 +153,7 @@ def load_data(test_size: float = TEST_SIZE, purge_days: int = PURGE_DAYS):
     features = features.sort_values("date").reset_index(drop=True)
     feature_columns = _feature_columns(features)
 
-    n_test = max(1, int(len(features) * test_size))
+    n_test = max(1, min(int(test_days), len(features) - 1))
     test_start = len(features) - n_test
     train_end = max(0, test_start - purge_days)
 
@@ -473,8 +479,10 @@ def summarize(results):
             if np.isfinite(row["test_pi"]):
                 mlflow.log_metric(f"{row['method']}_test_pi", row["test_pi"])
             mlflow.log_metric(f"{row['method']}_time_sec", row["time_sec"])
-        df.to_csv("tuning_comparison.csv", index=False)
-        mlflow.log_artifact("tuning_comparison.csv")
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "tuning_comparison.csv"
+            df.to_csv(path, index=False)
+            mlflow.log_artifact(str(path))
 
     return df
 

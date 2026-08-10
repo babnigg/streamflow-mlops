@@ -140,7 +140,3 @@ def predict_latest():
     except Exception as e:
         raise HTTPException(503, str(e))
     return Prediction(**result)
-
-
-def create_app() -> FastAPI:
-    return app

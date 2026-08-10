@@ -7,6 +7,7 @@ from streamflow.tune import main as tune_main
 from streamflow.validate import validate as validate_data
 from streamflow.predict import predict_next_day
 from streamflow.monitor import run as monitor_run
+from streamflow.registry import champion_version
 from streamflow.config import CONFIG
 
 @task(retries=2, retry_delay_seconds=60, log_prints=True)
@@ -52,8 +53,14 @@ def monitor_task(prediction):
 
 @task(log_prints=True)
 def train_task():
+    """Retrain and put the candidate through the promotion gate.
+
+    train_main registers a new version and only moves the champion alias if the
+    candidate wins on the held-out window, so this task can run on a false alarm
+    without changing what is served.
+    """
     model, run_id = train_main()
-    print(f"MLflow run: {run_id}")
+    print(f"MLflow run: {run_id} | champion now v{champion_version()}")
     return run_id
 
 @flow(name="streamflow-retrain")

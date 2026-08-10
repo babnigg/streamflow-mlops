@@ -36,24 +36,50 @@ mlflow:
   experiment_deploy: "streamflow_xgboost_deploy"
   experiment_tune: "streamflow_xgboost_tuning"
   best_params_path: "config/best_params.yaml"
+  registered_model: "streamflow-xgb"
+  champion_alias: "champion"
 
-# Chronological hold-out. purge_days must be >= the longest lag/rolling window
-# in features.py, or train and test share history.
+# A retrain is a candidate, not a deployment. Promotion compares candidate and
+# champion on the same held-out window and only moves the alias if the candidate
+# wins - monitoring can fire on inputs that are valid but wrong, and an
+# unguarded retrain would then ship a worse model while the alert log records
+# the problem as remediated.
+promotion:
+  # Persistence index, because that is what monitoring alarms on; promoting on a
+  # metric nobody watches would let the served model drift from the gate.
+  metric: "pi"
+  # A candidate must not be materially worse. Small negative moves are noise on
+  # a 365-day window, so an exactly-equal retrain on fresher data still ships.
+  tolerance: 0.02
+
+# Chronological hold-out, as a fixed number of days rather than a fraction: a
+# fraction of an 82-year record is a 12-year hold-out, so the deployed model
+# would never see recent data and retraining could not move the window forward.
+# purge_days must exceed the longest lag/rolling window in features.py - the
+# target is next-day, so an equal gap still lets a train label be a test feature.
 split:
-  test_size: 0.15
-  purge_days: 30
+  test_days: 365
+  purge_days: 31
 
 # Windows are durations so a move to hourly data is a config change. Thresholds
 # are calibrated from a backtest (monitor.calibrate_pi_threshold), not copied
 # from literature - at a different cadence they must be re-derived, not reused.
 monitoring:
-  pi_window_days: 60          # 0/64 non-overlapping blocks fell below 0 over a 10.5y backtest
+  # 90 not 60: on a 10.5y healthy backtest the rolling PI dips below 0 on 0.61%
+  # of 90-day windows vs 1.99% at 60 and 8.28% at 30 (3 spurious episodes vs 9
+  # vs 31), while an induced stale model is still caught on every single day.
+  # Requiring consecutive breaches does not substitute - healthy dips run up to
+  # 19 days. Re-derive with notebooks/05_monitoring after any model change.
+  pi_window_days: 90
   pi_alert_below: 0.0         # PI < 0 = worse than persistence
   # ML Test Score Monitor 4: a model that is merely old is a known risk even
   # before performance drops. Retrains are cheap here, so keep this tight.
   max_model_age_days: 30
   drift_window_days: 90       # daily cadence: shorter windows are statistically underpowered
-  drift_share: 0.5            # fraction of watched columns that must drift
+  # 1 of the 4 watched columns. The thresholds below sit above the clean
+  # maximum, so a single breach is already evidence; requiring two would miss
+  # every single-sensor failure (a stuck gauge, a recalibrated thermometer).
+  drift_share: 0.25
   psi_threshold: 0.2          # reported default; per-column alarms use the values below
   # Calibrated, not borrowed. PSI 0.2 is the textbook cutoff, but on 90-day daily
   # windows every known-clean historical window exceeded it - streamflow alone
@@ -61,10 +87,10 @@ monitoring:
   # column, so an undisturbed window is quiet and a real shift still stands out.
   # Re-derive with notebooks/05_monitoring (they will tighten at hourly cadence).
   psi_thresholds:
-    streamflow_t: 1.6
-    precip_mm: 0.5
-    tmax_c: 0.5
-    tmin_c: 1.0
+    streamflow_t: 2.5      # clean max 2.20 (a quiet winter quarter)
+    precip_mm: 0.5         # clean max 0.40
+    tmax_c: 0.6            # clean max 0.51
+    tmin_c: 1.0            # clean max 0.80
   # the drift reference is the same season in recent years, not a calendar window:
   # season fixes "every summer looks drifted", recency avoids comparing against
   # decades of a different river regime.

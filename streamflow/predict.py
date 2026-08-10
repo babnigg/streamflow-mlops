@@ -12,76 +12,38 @@ re-search hyperparameters.
 Usage:
     python -m streamflow.predict
 """
-from pathlib import Path
-from urllib.parse import urlparse
-from urllib.request import url2pathname
-
 import numpy as np
 import pandas as pd
 import mlflow
 import mlflow.xgboost
 
-from .config import resolve, CONFIG, MLFLOW_TRACKING_URI, EXPERIMENT_DEPLOY
+from . import registry
+from .config import (resolve, CONFIG, MLFLOW_TRACKING_URI, EXPERIMENT_DEPLOY,
+                     REGISTERED_MODEL, CHAMPION_ALIAS)
 from .features import build_features, TARGET_COLUMN, _feature_columns
 
 MLFLOW_EXPERIMENT = EXPERIMENT_DEPLOY
 
 
 def load_latest_model():
-    """Fetch the most recently logged model from the deploy experiment.
+    """Load the model carrying the champion alias.
 
-    Raises RuntimeError if no run exists yet -- streamflow.train must be run
-    at least once before predictions are possible.
+    Serving follows the alias rather than the newest run: a retrain that loses
+    its promotion comparison stays registered and unserved, and a bad promotion
+    is undone by moving the alias back (streamflow.registry.rollback) instead of
+    by retraining.
     """
     mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
-    client = mlflow.tracking.MlflowClient()
-
-    experiment = client.get_experiment_by_name(MLFLOW_EXPERIMENT)
-    if experiment is None:
+    model = registry.load_champion()
+    if model is None:
         raise RuntimeError(
-            f"No MLflow experiment '{MLFLOW_EXPERIMENT}' found -- "
+            f"No '{CHAMPION_ALIAS}' model registered for '{REGISTERED_MODEL}' -- "
             "run `python -m streamflow.train` first"
         )
-
-    runs = client.search_runs(
-        experiment_ids=[experiment.experiment_id],
-        order_by=["start_time DESC"],
-        max_results=1,
-    )
-    if not runs:
-        raise RuntimeError(
-            f"No runs found in experiment '{MLFLOW_EXPERIMENT}' -- "
-            "run `python -m streamflow.train` first"
-        )
-
-    run = runs[0]
-    model = _load_model_for_run(client, experiment, run)
-    return model, run.info.run_id
-
-
-def _load_model_for_run(client, experiment, run):
-    """Load the model logged by `run`, without trusting MLflow's recorded paths.
-
-    MLflow records an absolute artifact path, so a store written on one machine
-    is unreadable from another or from inside a container. For a local store we
-    rebuild the path from the root we are pointed at; otherwise fall back to the
-    usual `runs:/` lookup.
-    """
-    root = MLFLOW_TRACKING_URI
-    if root.startswith("file:"):
-        root = url2pathname(urlparse(root).path)
-        try:
-            logged = client.search_logged_models(experiment_ids=[experiment.experiment_id])
-        except Exception:
-            logged = []
-        for m in logged:
-            if getattr(m, "source_run_id", None) not in (None, run.info.run_id):
-                continue
-            local = Path(root) / experiment.experiment_id / "models" / m.model_id / "artifacts"
-            if (local / "MLmodel").exists():
-                return mlflow.xgboost.load_model(str(local))
-
-    return mlflow.xgboost.load_model(f"runs:/{run.info.run_id}/model")
+    version = registry.champion_version()
+    run_id = mlflow.tracking.MlflowClient().get_model_version(
+        REGISTERED_MODEL, version).run_id
+    return model, run_id
 
 
 def latest_feature_row(raw_df: pd.DataFrame) -> pd.DataFrame:
@@ -109,6 +71,12 @@ def predict_next_day(raw_df: pd.DataFrame = None) -> dict:
 
     row = latest_feature_row(raw_df)
     feature_columns = _feature_columns(row)
+
+    # XGBoost routes NaN down a default branch rather than failing, so an
+    # incomplete history would return a plausible number instead of an error
+    missing = row[feature_columns].columns[row[feature_columns].isna().any()].tolist()
+    if missing:
+        raise RuntimeError(f"incomplete feature history, missing values in: {missing}")
 
     model, run_id = load_latest_model()
     pred_log = model.predict(row[feature_columns])[0]

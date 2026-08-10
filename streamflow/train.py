@@ -11,10 +11,12 @@ even though no search runs here.
 Usage:
     python -m streamflow.train
 """
+import numpy as np
 import yaml
 import mlflow
 import mlflow.xgboost
 import xgboost as xgb
+from mlflow.models import infer_signature
 from sklearn.metrics import mean_absolute_error
 
 try:
@@ -25,7 +27,8 @@ except ImportError:
     def root_mean_squared_error(y_true, y_pred):
         return _mse(y_true, y_pred) ** 0.5
 
-from .config import resolve, EXPERIMENT_DEPLOY, MLFLOW_TRACKING_URI
+from . import registry
+from .config import resolve, EXPERIMENT_DEPLOY, MLFLOW_TRACKING_URI, REGISTERED_MODEL
 from .tune import (
     BEST_PARAMS_PATH,
     RANDOM_STATE,
@@ -53,8 +56,16 @@ def main():
     mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
     mlflow.set_experiment(MLFLOW_EXPERIMENT)
 
+    # scored before the candidate is trained, so both are measured on the same
+    # held-out window - the champion's own recorded metrics describe whatever
+    # split existed when it was fitted
+    champion = registry.load_champion()
+    champion_scores = registry.evaluate(champion, X_test, y_test) if champion else None
+
     with mlflow.start_run(run_name="deploy_train") as run:
         mlflow.log_params(params)
+        mlflow.log_params({"n_train": len(X_train), "n_test": len(X_test),
+                           "n_features": len(feature_columns)})
         mlflow.set_tag("tuning_method", config["method"])
 
         model = xgb.XGBRegressor(
@@ -73,10 +84,31 @@ def main():
 
         mlflow.log_metrics({"test_rmse": rmse, "test_mae": mae,
                             "test_nse": nse, "test_pi": pi})
-        mlflow.xgboost.log_model(model, name="model")
+        info = mlflow.xgboost.log_model(
+            model, name="model",
+            signature=infer_signature(X_test, preds),
+            input_example=X_test.head(3),
+            registered_model_name=REGISTERED_MODEL,
+        )
 
         # PI is the one to watch: negative means persistence would beat us.
         print(f"test RMSE={rmse:.4f}, MAE={mae:.4f}, NSE={nse:.4f}, PI={pi:.4f}")
+
+        candidate = {"rmse": rmse, "mae": mae, "nse": nse, "pi": pi}
+        verdict = registry.compare(candidate, champion_scores)
+        mlflow.set_tag("promoted", str(verdict["promote"]).lower())
+        mlflow.set_tag("promotion_reason", verdict["reason"])
+        if champion_scores:
+            mlflow.log_metrics({f"champion_{k}": v for k, v in champion_scores.items()
+                                if v is not None and np.isfinite(v)})
+
+        version = info.registered_model_version
+        if verdict["promote"]:
+            registry.promote(version)
+
+        print(f"{'PROMOTED' if verdict['promote'] else 'REJECTED'} v{version}: {verdict['reason']}")
+        if not verdict["promote"]:
+            print(f"  champion v{registry.champion_version()} stays deployed")
 
         run_id = run.info.run_id
 

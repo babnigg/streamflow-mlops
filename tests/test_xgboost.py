@@ -73,7 +73,7 @@ def test_load_data_derives_feature_columns_excluding_metadata(monkeypatch):
     df = _dated_df(20, extra_cols={"approval_status": ["Approved"] * 20})
     monkeypatch.setattr(mod.pd, "read_parquet", lambda path: df)
 
-    X_train, X_test, y_train, y_test, returned_columns = mod.load_data(test_size=0.2, purge_days=0)
+    X_train, X_test, y_train, y_test, returned_columns = mod.load_data(test_days=4, purge_days=0)
 
     assert returned_columns == ["a", "b"]
     assert list(X_train.columns) == ["a", "b"]
@@ -81,11 +81,11 @@ def test_load_data_derives_feature_columns_excluding_metadata(monkeypatch):
     assert "date" not in X_train.columns
 
 
-def test_load_data_test_size_controls_holdout_length(monkeypatch):
+def test_load_data_test_days_controls_holdout_length(monkeypatch):
     df = _dated_df(100)
     monkeypatch.setattr(mod.pd, "read_parquet", lambda path: df)
 
-    X_train, X_test, y_train, y_test, _ = mod.load_data(test_size=0.2, purge_days=0)
+    X_train, X_test, y_train, y_test, _ = mod.load_data(test_days=20, purge_days=0)
 
     assert len(X_test) == 20
     assert len(X_train) == 80
@@ -95,9 +95,9 @@ def test_load_data_purge_gap_is_dropped_from_train(monkeypatch):
     df = _dated_df(100)
     monkeypatch.setattr(mod.pd, "read_parquet", lambda path: df)
 
-    X_train, X_test, y_train, y_test, _ = mod.load_data(test_size=0.2, purge_days=10)
+    X_train, X_test, y_train, y_test, _ = mod.load_data(test_days=20, purge_days=10)
 
-    # test_size=0.2 of 100 -> 20 test rows -> test starts at index 80;
+    # 20 test rows -> test starts at index 80;
     # purge_days=10 -> train ends at index 70, so 10 rows sit in the embargo.
     assert len(X_test) == 20
     assert len(X_train) == 70
@@ -107,7 +107,7 @@ def test_load_data_train_precedes_test_chronologically(monkeypatch):
     df = _dated_df(50)
     monkeypatch.setattr(mod.pd, "read_parquet", lambda path: df)
 
-    X_train, X_test, y_train, y_test, _ = mod.load_data(test_size=0.2, purge_days=5)
+    X_train, X_test, y_train, y_test, _ = mod.load_data(test_days=10, purge_days=5)
 
     assert X_train.index.max() < X_test.index.min()
 
@@ -116,8 +116,8 @@ def test_load_data_split_is_deterministic(monkeypatch):
     df = _dated_df(30)
     monkeypatch.setattr(mod.pd, "read_parquet", lambda path: df)
 
-    result_1 = mod.load_data(test_size=0.2, purge_days=0)
-    result_2 = mod.load_data(test_size=0.2, purge_days=0)
+    result_1 = mod.load_data(test_days=6, purge_days=0)
+    result_2 = mod.load_data(test_days=6, purge_days=0)
 
     pd.testing.assert_frame_equal(result_1[0], result_2[0])  # X_train
     pd.testing.assert_series_equal(result_1[2], result_2[2])  # y_train
@@ -267,10 +267,20 @@ def test_summarize_best_method_by_cv_rmse_is_identifiable(fake_results, tmp_path
     assert best_row["method"] == "bayesian_optuna"
 
 
-def test_summarize_writes_csv_artifact(fake_results, tmp_path, monkeypatch):
+def test_summarize_logs_the_comparison_csv_as_a_run_artifact(fake_results, tmp_path, monkeypatch):
+    """The comparison belongs to the MLflow run, not to whatever directory
+    tuning was launched from."""
     monkeypatch.chdir(tmp_path)
     mod.summarize(fake_results)
-    assert (tmp_path / "tuning_comparison.csv").exists()
+
+    run_id = mlflow.search_runs(
+        experiment_names=["test_experiment"],
+        filter_string="tags.mlflow.runName = 'method_comparison_summary'",
+    ).iloc[0]["run_id"]
+    artifacts = [a.path for a in mlflow.tracking.MlflowClient().list_artifacts(run_id)]
+
+    assert "tuning_comparison.csv" in artifacts
+    assert not (tmp_path / "tuning_comparison.csv").exists()
 
 
 def test_summarize_logs_a_summary_run_to_mlflow(fake_results, tmp_path, monkeypatch):

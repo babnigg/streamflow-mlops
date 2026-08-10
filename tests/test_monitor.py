@@ -46,13 +46,37 @@ def test_rolling_pi_is_ratio_of_sums_not_mean_of_ratios():
     assert (r > -10).all()
 
 
-def test_calibrate_uses_non_overlapping_blocks():
+def test_rolling_pi_uses_the_full_window_and_no_partial_ones():
+    """Pins the window itself: a shorter or partially-filled window would report
+    a few days of noise as if it were a 60-day verdict."""
+    s = _scored(n=100)
+    r = monitor.rolling_pi(s, window_days=60)
+
+    assert len(r) == len(s)                  # aligned to the input rows
+    assert r.iloc[:59].isna().all()           # no value before the window fills
+    assert r.notna().iloc[59:].all()
+    # the first valid value must use exactly 60 rows
+    expected = 1 - s["se_model"][:60].sum() / s["se_persistence"][:60].sum()
+    assert np.isclose(r.iloc[59], expected)
+
+
+def test_calibrate_measures_the_same_estimator_the_alarm_uses():
+    """The alarm is an overlapping rolling PI, so calibration must be too -
+    non-overlapping blocks evaluate one arbitrary phase and read far rosier."""
     s = _scored(n=300)
     out = monitor.calibrate_pi_threshold(s, window_days=60)
-    assert out["n_blocks"] == 4          # 300/60 = 5 blocks, minus the partial tail
+
+    assert out["n_windows"] == len(monitor.rolling_pi(s, 60).dropna())
     assert out["window_days"] == 60
-    assert out["min"] <= out["median"]
-    assert out["suggested_threshold"] <= 0.0
+    assert 0.0 <= out["share_below_zero"] <= 1.0
+    assert -1.0 <= out["suggested_threshold"] <= 0.0   # clamped both ways
+
+
+def test_calibrate_refuses_to_guess_from_too_little_data():
+    """Returning a plausible threshold from an unfillable window would be
+    indistinguishable from a real calibration."""
+    with pytest.raises(ValueError):
+        monitor.calibrate_pi_threshold(_scored(n=30), window_days=60)
 
 
 # ---------------------------------------------------------------- decisions
@@ -65,6 +89,16 @@ def test_data_quality_failure_takes_precedence_and_never_retrains():
 def test_sustained_performance_loss_is_the_only_retrain_trigger():
     d = monitor.decide(-0.5, {"passed": True}, threshold=0.0)
     assert d["action"] == "retrain"
+
+
+def test_flood_flags_but_never_retrains():
+    """A flood is the rarest data we have; refitting on it teaches the extreme
+    as normal."""
+    d = monitor.decide(0.35, {"passed": True},
+                       event={"is_anomaly": True, "flow": 3420.0,
+                              "seasonal_p99": 3375.0, "times_p99": 1.01})
+    assert d["status"] == "anomaly"
+    assert d["action"] == "flag_only"
 
 
 def test_drift_alone_does_not_retrain():
@@ -81,9 +115,42 @@ def test_healthy_system_reports_ok():
     assert d["status"] == "ok" and d["action"] == "none"
 
 
-def test_nan_pi_does_not_trigger_retrain():
+def test_unmeasured_pi_is_not_reported_as_healthy():
+    """A span too short for the PI window says nothing about the model. Logging
+    it as 'ok' would hide a monitor that never actually ran."""
     d = monitor.decide(float("nan"), {"passed": True})
     assert d["action"] == "none"
+    assert d["status"] == "insufficient_history"     # not "ok"
+
+
+def test_skipped_drift_is_distinguishable_from_clean_drift():
+    never_ran = monitor.decide(0.35, {"passed": True}, drift=None)
+    ran_clean = monitor.decide(0.35, {"passed": True},
+                               drift={"dataset_drift": False, "drift_share": 0.1})
+    assert never_ran["drift_evaluated"] is False
+    assert ran_clean["drift_evaluated"] is True
+    assert ran_clean["drift_share"] == 0.1
+
+
+def test_unknown_model_age_is_investigated_not_assumed_fresh():
+    """An MLflow outage must not silently switch the staleness check off."""
+    d = monitor.decide(0.35, {"passed": True},
+                       system={"model_age_days": float("nan"), "nonfinite_predictions": 0})
+    assert d["status"] == "system" and d["action"] == "investigate"
+
+
+def test_persistence_index_does_not_reward_missing_predictions():
+    """Skipping NaN per-column would score the model on the days it managed to
+    predict against persistence on all days - failing more would look better."""
+    s = pd.DataFrame({"se_model": np.full(100, 0.04),        # 2x persistence error
+                      "se_persistence": np.full(100, 0.01)})
+    assert np.isclose(monitor.persistence_index(s), -3.0)
+
+    broken = s.copy()
+    broken.loc[:79, "se_model"] = np.nan          # model emits NaN on 80% of days
+    # skipna per column would give +0.2 here - the sign flips and a broken model
+    # reads as better than persistence
+    assert monitor.persistence_index(broken) < 0
 
 
 # ---------------------------------------------------------------- reference
@@ -139,8 +206,18 @@ def test_stale_model_triggers_retrain_before_performance_degrades():
 def test_broken_feed_outranks_every_other_signal():
     d = monitor.decide(-9.0, {"passed": False, "reason": "stale feed"},
                        drift={"dataset_drift": True, "drift_share": 1.0},
+                       event={"is_anomaly": True, "flow": 9e9, "seasonal_p99": 1.0,
+                              "times_p99": 9e9},
                        system={"model_age_days": 999, "nonfinite_predictions": 7})
     assert d["action"] == "reject_input"
+
+
+def test_sustained_loss_outranks_a_concurrent_flood():
+    """A flood during real degradation must not downgrade a retrain to a flag."""
+    d = monitor.decide(-0.5, {"passed": True}, threshold=0.0,
+                       event={"is_anomaly": True, "flow": 3420.0,
+                              "seasonal_p99": 3375.0, "times_p99": 1.01})
+    assert d["action"] == "retrain"
 
 
 def test_system_signals_are_carried_into_the_alert_row():
