@@ -46,7 +46,7 @@ def fetch_usgs_daily(cfg: dict = CONFIG) -> pd.DataFrame:
                 "qualifier": q,
                 "last_modified": p.get("last_modified"),
             })
-        nxt = [l["href"] for l in payload.get("links", []) if l.get("rel") == "next"]
+        nxt = [link["href"] for link in payload.get("links", []) if link.get("rel") == "next"]
         url, params, page = (nxt[0], None, page + 1) if nxt else (None, None, page)
         print(f"  usgs page {page}: {len(rows):,} records", end="\r")
     print()

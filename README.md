@@ -1,5 +1,7 @@
 # streamflow-mlops
 
+[![ci](https://github.com/babnigg/streamflow-mlops/actions/workflows/ci.yml/badge.svg)](https://github.com/babnigg/streamflow-mlops/actions/workflows/ci.yml)
+
 MLOps pipeline forecasting next-day streamflow for the Des Plaines River at
 Riverside, IL (USGS 05532500). ADSP 32021 final project - Team 3 (Tori, Janvi,
 Daniel, Saya).

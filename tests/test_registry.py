@@ -114,7 +114,8 @@ def _log_version(seed=0, promoted=True):
     pip_requirements is pinned so MLflow skips dependency inference, which
     dominates the runtime of these tests and tells us nothing about promotion.
     """
-    import mlflow, mlflow.xgboost
+    import mlflow
+    import mlflow.xgboost
     from xgboost import XGBRegressor
     rng = np.random.default_rng(seed)
     X, y = rng.random((30, 2)), rng.random(30)

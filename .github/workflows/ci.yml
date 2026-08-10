@@ -1,0 +1,35 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - run: pip install -r requirements.txt
+
+      - run: ruff check streamflow/ tests/ flows/
+
+      # The suite needs no data, model or network: fixtures are synthetic and
+      # the two tests that would need a live API skip themselves. Anything that
+      # starts reaching for the network belongs behind RUN_LIVE, not here.
+      - run: pytest -q
+
+  # Serving is the graded artifact, so a broken Dockerfile should fail the build
+  # rather than surface during the demo. Not pushed anywhere - the deploy step
+  # in this project is moving the MLflow champion alias.
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t streamflow-api .

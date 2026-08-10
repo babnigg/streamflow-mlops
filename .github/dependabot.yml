@@ -1,0 +1,17 @@
+version: 2
+
+# ML Test Score, Monitor 1: "dependencies have changed". Pinning tells us what
+# we depend on; this tells us when it moves. A model trained under one xgboost
+# and served under another is a silent train/serve skew, and the pins are the
+# only thing preventing it.
+updates:
+  - package-ecosystem: pip
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: monthly

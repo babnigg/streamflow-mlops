@@ -244,7 +244,7 @@ def run_grid_search(X_train, y_train, X_test, y_test, param_grid=None, base_para
         **base_params,
     )
 
-    with mlflow.start_run(run_name="grid_search_parent") as parent_run:
+    with mlflow.start_run(run_name="grid_search_parent"):
         mlflow.set_tag("tuning_method", "grid_search")
         mlflow.log_param("grid_size", np.prod([len(v) for v in param_grid.values()]))
 

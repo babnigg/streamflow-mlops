@@ -68,15 +68,18 @@ def test_stale_feed_is_rejected():
 
 
 def test_impossible_values_are_rejected():
-    neg = _raw(); neg.loc[0, "streamflow_cfs"] = -1
+    neg = _raw()
+    neg.loc[0, "streamflow_cfs"] = -1
     with pytest.raises(V.DataValidationError, match="Negative"):
         V.check_value_ranges(neg)
 
     # sentinel / unit swap: the record high at this gauge is 10,700 cfs
-    huge = _raw(); huge.loc[0, "streamflow_cfs"] = 999_999
+    huge = _raw()
+    huge.loc[0, "streamflow_cfs"] = 999_999
     with pytest.raises(V.DataValidationError, match="exceeds"):
         V.check_value_ranges(huge)
 
-    hot = _raw(); hot.loc[0, "tmax_c"] = 80
+    hot = _raw()
+    hot.loc[0, "tmax_c"] = 80
     with pytest.raises(V.DataValidationError, match="Temperature"):
         V.check_value_ranges(hot)

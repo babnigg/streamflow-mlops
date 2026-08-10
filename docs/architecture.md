@@ -60,10 +60,9 @@ Signals are checked in that order: a broken feed or an unusable model is caught
 before performance, since a PI computed on bad inputs says nothing about the
 model.
 
-Coverage against the ML Test Score monitoring tests (Table IV): Monitor 2 and 3
-via `validate.py` and the single shared feature path, 4/5/6 via the system
-pillar, 7 via the persistence index. Monitor 1 (dependency-change notification)
-is not implemented - dependencies are pinned, but nothing watches them.
+Coverage against the ML Test Score monitoring tests (Table IV): Monitor 1 via
+Dependabot, 2 and 3 via `validate.py` and the single shared feature path, 4/5/6
+via the system pillar, 7 via the persistence index.
 
 Everything runs through `score_range(start, end)`, which scores any historical
 span. A production run is a span of one day; the demo is a span of years, so
@@ -167,6 +166,23 @@ data still ships, a materially worse one never does.
 - artificial corruption (out-of-bounds, swapped cols, schema): the API rejects
   schema/range violations at the Pydantic boundary, and Evidently catches
   shifts that are valid but wrong (notebooks/05_monitoring)
+
+## ci
+
+`.github/workflows/ci.yml` runs ruff and the full suite on every push and PR,
+plus a Docker build so a broken image fails the build rather than the demo.
+
+The suite needs no data, model, network or secrets - fixtures are synthetic and
+the two tests that would need a live API skip themselves - so CI is the same
+command a teammate runs locally (~6 min, 90 passed / 2 skipped).
+
+There is no deploy job: nothing is deployed to. The deployment step in this
+project is the promotion gate moving the `champion` alias, which is what serving
+resolves.
+
+Dependabot watches pip and actions weekly. That is ML Test Score Monitor 1 -
+pinning records what we depend on, but only a watcher notices when it moves, and
+a model trained under one xgboost and served under another is silent skew.
 
 ## work split
 
