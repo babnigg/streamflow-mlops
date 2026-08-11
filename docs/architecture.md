@@ -60,9 +60,11 @@ Signals are checked in that order: a broken feed or an unusable model is caught
 before performance, since a PI computed on bad inputs says nothing about the
 model.
 
-Coverage against the ML Test Score monitoring tests (Table IV): Monitor 1 via
-Dependabot, 2 and 3 via `validate.py` and the single shared feature path, 4/5/6
-via the system pillar, 7 via the persistence index.
+Coverage against the ML Test Score monitoring tests (Table IV): Monitor 2 and 3
+via `validate.py` and the single shared feature path, 4/5/6 via the system
+pillar, 7 via the persistence index. Monitor 1 (dependency-change notification)
+is not implemented - every dependency is pinned, but nothing watches them for
+change.
 
 Everything runs through `score_range(start, end)`, which scores any historical
 span. A production run is a span of one day; the demo is a span of years, so
@@ -180,9 +182,12 @@ There is no deploy job: nothing is deployed to. The deployment step in this
 project is the promotion gate moving the `champion` alias, which is what serving
 resolves.
 
-Dependabot watches pip and actions weekly. That is ML Test Score Monitor 1 -
-pinning records what we depend on, but only a watcher notices when it moves, and
-a model trained under one xgboost and served under another is silent skew.
+Every dependency is pinned exactly, in both requirement files and to the same
+versions: the model is pickled by the training environment and unpickled by the
+serving one, so a version gap across that boundary is silent train/serve skew.
+The pins are resolved together on Linux, not read off a developer machine - a
+loose pin only has to disagree once to make the file uninstallable, and the
+machine that writes it is the least likely place to notice.
 
 ## work split
 

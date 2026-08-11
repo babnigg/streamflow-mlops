@@ -7,7 +7,7 @@
 # mlflow-skinny: tracking client without the server/UI stack.
 # scikit-learn:  the model is an xgboost.sklearn.XGBRegressor, so the wrapper
 #                must be importable to deserialize it.
-fastapi==0.137.1
+fastapi==0.141.1
 uvicorn[standard]==0.34.0
 pydantic==2.11.10
 pandas==2.2.3

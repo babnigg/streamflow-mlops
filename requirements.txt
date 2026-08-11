@@ -19,7 +19,10 @@ optuna==4.9.0
 optuna-integration[mlflow]==4.9.0
 
 # serving (stage 3)
-fastapi==0.137.1
+# fastapi floor is set by prefect, which requires >=0.139.0 - pinning the two
+# independently from a machine without prefect installed makes the file
+# unresolvable, which is exactly how it broke the first time.
+fastapi==0.141.1
 uvicorn[standard]==0.34.0
 pydantic==2.11.10
 
