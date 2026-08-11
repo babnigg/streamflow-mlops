@@ -1,15 +1,19 @@
 # Inference dependencies only - no optuna, prefect, jupyter or matplotlib.
-# xgboost-cpu:   the default wheel bundles ~400MB of CUDA we never use.
+# Fully pinned, and pinned to the SAME versions as requirements.txt: the model
+# is pickled by the training environment and unpickled here, so a version gap
+# across that boundary is silent train/serve skew.
+# xgboost-cpu:   same version as training; the default wheel bundles ~400MB of
+#                CUDA we never use.
 # mlflow-skinny: tracking client without the server/UI stack.
 # scikit-learn:  the model is an xgboost.sklearn.XGBRegressor, so the wrapper
 #                must be importable to deserialize it.
-fastapi
-uvicorn[standard]
-pydantic
-pandas
-pyarrow
-numpy
-pyyaml
+fastapi==0.137.1
+uvicorn[standard]==0.34.0
+pydantic==2.11.10
+pandas==2.2.3
+pyarrow==24.0.0
+numpy==2.0.2
+pyyaml==6.0.1
 mlflow-skinny==3.13.0
-xgboost-cpu==3.3.0
-scikit-learn==1.8.0
+xgboost-cpu==2.1.4
+scikit-learn==1.6.1

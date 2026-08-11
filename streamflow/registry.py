@@ -15,6 +15,10 @@ somewhere else, so its recorded score describes different days.
 
 from __future__ import annotations
 
+from pathlib import Path
+from urllib.parse import urlparse
+from urllib.request import url2pathname
+
 import mlflow
 import mlflow.xgboost
 import numpy as np
@@ -34,11 +38,46 @@ def champion_uri() -> str:
 
 
 def load_champion():
-    """The deployed model, or None when nothing has been promoted yet."""
+    """The deployed model, or None when nothing has been promoted yet.
+
+    The alias makes the *lookup* portable, but a file store still records an
+    absolute artifact path, so a store written on the host is unreadable from
+    inside the container. When the alias URI cannot be opened we rebuild the
+    path from the tracking root we were actually pointed at.
+    """
+    mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
     try:
         return mlflow.xgboost.load_model(champion_uri())
     except Exception:
+        pass
+
+    local = _champion_local_path()
+    if local is None:
         return None
+    try:
+        return mlflow.xgboost.load_model(str(local))
+    except Exception:
+        return None
+
+
+def _champion_local_path():
+    """Where the champion's artifacts sit under this tracking root, if local."""
+    root = MLFLOW_TRACKING_URI
+    if not root.startswith("file:"):
+        return None
+    root = Path(url2pathname(urlparse(root).path))
+
+    try:
+        mv = _client().get_model_version_by_alias(REGISTERED_MODEL, CHAMPION_ALIAS)
+    except Exception:
+        return None
+
+    model_id = str(mv.source).rsplit("/", 1)[-1]      # models:/m-<id>
+    for exp in root.glob("*/models"):
+        candidate = exp / model_id / "artifacts"
+        if (candidate / "MLmodel").exists():
+            return candidate
+    return None
 
 
 def champion_version() -> str | None:

@@ -9,20 +9,22 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
-          python-version: "3.12"
+          python-version: "3.12.2"
           cache: pip
 
       - run: pip install -r requirements.txt
 
+      # ruff is pinned in requirements.txt: an unpinned linter turns a new
+      # release into a red build on a commit that changed nothing
       - run: ruff check streamflow/ tests/ flows/
 
-      # The suite needs no data, model or network: fixtures are synthetic and
-      # the two tests that would need a live API skip themselves. Anything that
-      # starts reaching for the network belongs behind RUN_LIVE, not here.
+      # The suite needs no data, model, network or secrets: fixtures are
+      # synthetic and the two tests that would need a live API skip themselves.
+      # Anything that starts reaching for the network belongs behind RUN_LIVE.
       - run: pytest -q
 
   # Serving is the graded artifact, so a broken Dockerfile should fail the build
@@ -31,5 +33,5 @@ jobs:
   docker:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - run: docker build -t streamflow-api .

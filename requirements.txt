@@ -1,32 +1,37 @@
+# Fully pinned. Loose pins let CI resolve a different stack than the one the
+# tests and the trained model were validated against - xgboost in particular,
+# where the version that pickles a model and the version that loads it must
+# agree. Bump deliberately via the Dependabot PRs, never by drift.
+
 # core pipeline
-requests
-pandas
-pyarrow
-pyyaml
-numpy
-dvc
+requests==2.34.2
+pandas==2.2.3
+pyarrow==24.0.0
+pyyaml==6.0.1
+numpy==2.0.2
+dvc==3.67.1
 
 # modeling + tracking
 mlflow==3.13.0
-xgboost==3.3.0
-scikit-learn==1.8.0
+xgboost==2.1.4
+scikit-learn==1.6.1
 optuna==4.9.0
 optuna-integration[mlflow]==4.9.0
 
 # serving (stage 3)
-fastapi
-uvicorn[standard]
-pydantic
+fastapi==0.137.1
+uvicorn[standard]==0.34.0
+pydantic==2.11.10
 
 # monitoring (stage 4) - heavy: pulls a web-server stack,
 # so deliberately NOT in requirements-serve.txt
 evidently==0.7.21
 
 # orchestration
-prefect
+prefect==3.8.1
 
 # dev / notebooks (not needed in the container - see .dockerignore)
-matplotlib
-jupyter
-pytest==9.1.1
-ruff
+matplotlib==3.9.1
+jupyter==1.1.1
+pytest==9.1.0
+ruff==0.15.22
