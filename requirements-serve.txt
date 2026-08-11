@@ -16,4 +16,4 @@ numpy==2.0.2
 pyyaml==6.0.1
 mlflow-skinny==3.13.0
 xgboost-cpu==2.1.4
-scikit-learn==1.6.1
+scikit-learn==1.9.0
