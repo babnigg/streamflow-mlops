@@ -17,6 +17,9 @@ env/
 mlruns/
 *.db
 
+# secrets - .env.example is the tracked template
+.env
+
 # os / editor
 .DS_Store
 Thumbs.db

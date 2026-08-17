@@ -8,6 +8,17 @@ import yaml
 REPO_ROOT = Path(__file__).resolve().parent.parent
 CONFIG_PATH = REPO_ROOT / "config" / "config.yaml"
 
+# Optional: a gitignored .env at repo root can set MLFLOW_TRACKING_URI/
+# MLFLOW_TRACKING_USERNAME/MLFLOW_TRACKING_PASSWORD to point tune.py/train.py
+# at a remote tracking server (e.g. DagsHub) instead of the local file store.
+# Real env vars (e.g. set by the serving container, which has no .env and no
+# python-dotenv install) still take precedence and work with this absent.
+try:
+    from dotenv import load_dotenv
+    load_dotenv(REPO_ROOT / ".env")
+except ImportError:
+    pass
+
 
 def load_config(path: Path = CONFIG_PATH) -> dict:
     with open(path, "r", encoding="utf-8") as f:
