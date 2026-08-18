@@ -191,7 +191,10 @@ def history(limit: int = 10) -> list[dict]:
                      "run_id": v.run_id[:8],
                      "pi": run.data.metrics.get("test_pi"),
                      "rmse": run.data.metrics.get("test_rmse"),
-                     "promoted": run.data.tags.get("promoted")})
+                     "promoted": run.data.tags.get("promoted"),
+                     # the gate's own verdict, so a rejection can be read back
+                     # off the run instead of being quoted from a stale log
+                     "reason": run.data.tags.get("promotion_reason")})
     return rows
 
 

@@ -24,3 +24,7 @@ mlruns/
 .DS_Store
 Thumbs.db
 .vscode/
+
+# per-machine claude code settings (permission allow-list) - the shared
+# .claude/settings.json, if one is ever added, stays tracked
+.claude/settings.local.json

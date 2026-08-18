@@ -37,9 +37,10 @@ Modelled in log space (flow spans 0-10,700 cfs).
   doing nothing.
 
 NSE alone is misleading here: on this autocorrelated series persistence by itself
-scores NSE 0.84, so the model's NSE 0.89 is only an 18% error reduction
-(PI 0.32). A stale model - trained on January, serving June - posts NSE -0.04
-while its PI is -3.04: four times worse than doing nothing. The alert threshold
+scores NSE 0.87, so the model's NSE 0.91 is only an 18% error reduction
+(PI 0.34). A stale model - trained on January, serving June - posts NSE +0.37,
+which reads as degraded but working, while its PI is -1.46: nearly two and a half
+times worse than doing nothing. The alert threshold
 is therefore `PI < 0` over a 90-day window (config `monitoring.pi_alert_below`)
 - see the calibration below.
 
@@ -73,26 +74,27 @@ replay is the normal path rather than a separate harness.
 **Thresholds are calibrated, not borrowed.** Two measurements set them:
 
 - *PI < 0 at 90 days.* Calibration measures the false-alarm rate of the same
-  overlapping rolling window the alarm uses, on a 10.5-year healthy backtest:
+  overlapping rolling window the alarm uses, on a 10.6-year healthy backtest
+  (3,881 days, 2016-01-01 to 2026-08-16):
 
   | window | windows below 0 | spurious episodes | worst |
   |---|---|---|---|
-  | 30 d | 8.28% | 31 | -13.12 |
-  | 60 d | 1.99% | 9 | -0.84 |
-  | 90 d | **0.61%** | **3** | -0.36 |
+  | 30 d | 8.26% | 35 | -14.91 |
+  | 60 d | 1.60% | 8 | -1.01 |
+  | 90 d | **0.50%** | **2** | -0.46 |
 
   An induced stale model is caught on 100% of days at either 60 or 90 (min PI
-  -3.21), so the wider window costs nothing in detection. Requiring N
-  consecutive breaches is not a substitute - healthy dips run up to 19 days.
+  -12.10 at 90 d), so the wider window costs nothing in detection. Requiring N
+  consecutive breaches is not a substitute - healthy dips run up to 18 days.
 
   Non-overlapping blocks would report 0/64 below zero for the same model, which
   is why they are not used: they evaluate one arbitrary phase of the block grid,
   and the deployed alarm evaluates every phase.
 - *Per-column PSI, above the clean maximum.* The textbook PSI 0.2 cutoff flags
-  **every** known-clean 90-day window here (streamflow reaches 2.20 in a quiet
+  **every** known-clean 90-day window here (streamflow reaches 1.34 in a quiet
   winter quarter). With per-column thresholds set above the clean maximum,
-  0/15 clean windows alarm while a -15 C shift (PSI 7.5), 5x rainfall (0.82)
-  and a 10x gauge fault (3.10) are all caught.
+  0/15 clean windows alarm while a -15 C shift (PSI 8.98), 5x rainfall (1.24)
+  and a 10x gauge fault (3.86) are all caught.
 
   The share counts only the four watched inputs. `target` and `prediction` have
   no calibrated threshold, so at the default cutoff both read as drifted in
@@ -104,8 +106,8 @@ cadence: the July 2026 flood scores 3.33 on streamflow over a 7-day window and
 0.19 over the 90-day window the sample size supports - two days of record flow
 diluted by eighty-eight ordinary ones. Shortening the window is not available
 either, per the null test below. So the event is detected directly, as today's
-flow against the seasonal 99th percentile: 1.0% of days over six years, 9
-distinct events. Like drift, it only ever flags.
+flow against the seasonal 99th percentile: 1.1% of days over the last 6.5 years,
+10 distinct events. Like drift, it only ever flags.
 
 **Why drift is not a pager.** Null test - two samples drawn from the *same*
 distribution, so no drift exists by construction. PSI still exceeds 0.2 on
@@ -115,11 +117,21 @@ are calibrated rather than borrowed, and why drift never pages on its own.
 Hourly data would put 2,160 rows in a 90-day window and could promote drift to a
 real alarm - one of the concrete arguments for that refactor.
 
-**Reference choice matters as much as the test.** The drift reference is the
-same season in recent years. Measured on the same current window: a calendar
-baseline gives PSI 0.57 purely from the season, an unlimited-history baseline
-1.41 (decades of changed river regime), and the season-matched last-10-years
-reference 0.13.
+**Reference choice matters as much as the test.** The drift reference is the same
+season in recent years. Scoring one known-clean current window against three
+notions of "normal" separates seasonality from drift:
+
+| reference | PSI (streamflow) | columns drifted |
+|---|---|---|
+| plain calendar, prior 90 d | 0.58 | 75% |
+| unlimited history | 0.13 | 50% |
+| **season-matched, recent** | **0.15** | **0%** |
+
+A calendar baseline carries the season itself and an unlimited one carries
+decades of changed river regime; only the season-matched reference the monitor
+actually uses reads a clean window as clean. Note that the per-column PSI barely
+separates the last two - it is the drifted-column share that does, which is why
+the thresholds are per column rather than one global cutoff.
 
 Only sustained PI < 0 retrains. A flood trips the distribution tests while the
 model is still healthy - retraining on it would teach the rarest data we have as
@@ -141,13 +153,15 @@ metrics are not comparable - it was fitted when the split ended somewhere else,
 so its stored score describes different days.
 
 Measured end to end, with a deliberately crippled retrain standing in for one
-triggered on bad-but-valid inputs (ICE/ESTIMATED qualifiers pass validation):
+triggered on bad-but-valid inputs (ICE/ESTIMATED qualifiers pass validation).
+The crippled hyperparameters live in `config/fault_injection.yaml` and the run
+logs `params_source`, so v3 is a reproducible experiment rather than an anecdote:
 
 | version | test PI | promoted | served |
 |---|---|---|---|
-| v1 | +0.3170 | yes (first model) | |
-| v2 | +0.3170 | yes (ties, within tolerance) | champion |
-| v3 | **-6.0157** | **no** | never |
+| v1 | +0.3357 | yes (first model) | |
+| v2 | +0.3357 | yes (ties, within tolerance) | champion |
+| v3 | **-7.5194** | **no** | never |
 
 `predict` continued to load v2. Under the previous newest-run-wins rule v3 would
 have gone straight into production while the alert log recorded the retrain as
@@ -199,7 +213,7 @@ plus a Docker build so a broken image fails the build rather than the demo.
 
 The suite needs no data, model, network or secrets - fixtures are synthetic and
 the tests that would need a live API or tracking server skip themselves - so CI is
-the same command a teammate runs locally (~7 min, 122 passed / 1 skipped).
+the same command a teammate runs locally (~8 min, 124 passed / 1 skipped).
 
 There is no deploy job: nothing is deployed to. The deployment step in this
 project is the promotion gate moving the `champion` alias, which is what serving

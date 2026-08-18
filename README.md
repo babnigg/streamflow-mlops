@@ -37,7 +37,20 @@ python -m streamflow.predict     # next-day forecast from the latest model
 ```
 
 Data is DVC-tracked: the `.dvc` pointers are committed, the parquets aren't.
-Re-run ingest/features to rebuild (no shared DVC remote is configured yet).
+The shared remote is the DagsHub S3 endpoint, so a teammate gets the exact
+parquets the model was trained on rather than a rebuild that drifts with the
+provisional tail:
+
+```bash
+pip install dvc-s3
+dvc remote modify origin --local access_key_id <dagshub-token>
+dvc remote modify origin --local secret_access_key <dagshub-token>
+dvc pull
+```
+
+`--local` writes to the gitignored `.dvc/config.local`; the tracked `.dvc/config`
+carries only the URL and endpoint. Without credentials, `ingest`/`features`
+still rebuild from the public APIs.
 
 Re-tune hyperparameters (slow, writes `config/best_params.yaml`):
 
@@ -57,13 +70,16 @@ python -m streamflow.registry            # versions, metrics, which one serves
 
 ```
 streamflow-xgb  (champion alias -> version 2)
-   v3   run 38e5266d  pi -6.0157  promoted=false
- * v2   run 1a16043c  pi +0.3170  promoted=true
-   v1   run 66a5ed60  pi +0.3170  promoted=true
+   v3   run f742ec00  pi -7.5194  promoted=false
+ * v2   run d6476b51  pi +0.3357  promoted=true
+   v1   run e3157527  pi +0.3357  promoted=true
 ```
 
-v3 is a crippled retrain: registered for audit, never served. Rollback is one
-call and skips rejected candidates:
+v3 is a crippled retrain - `python -m streamflow.train --params
+config/fault_injection.yaml` - registered for audit, never served. The
+deliberately bad hyperparameters live in a committed file and the run records
+`params_source`, so the rejection reproduces instead of being a one-off. Rollback
+is one call and skips rejected candidates:
 
 ```python
 from streamflow import registry
@@ -115,7 +131,7 @@ Run `python -m streamflow.train` at least once first, or there is no model to lo
 ## monitoring
 
 ```bash
-python -m streamflow.monitor            # scores every day on disk, ~12s
+python -m streamflow.monitor            # scores every day on disk, ~10s
 ```
 
 ```python
@@ -128,7 +144,7 @@ Writes `data/monitoring/predictions.parquet`, appends the decision to
 Prints one line:
 
 ```
-scored 30,138 days in 11.8s | model age 0.0d | rolling PI (90d) 0.370 | ok -> none
+scored 30,149 days in 9.822s | model age 0.0d | rolling PI (90d) 0.338 | ok -> none
 ```
 
 Three pillars, checked in order - a bad feed or an unusable model outranks
