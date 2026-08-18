@@ -115,18 +115,22 @@ uvicorn streamflow.serve:app --reload   # http://127.0.0.1:8000/docs
 ### docker
 
 The image is serving-only (`requirements-serve.txt`) - no optuna, prefect or
-jupyter. The model and data are mounted rather than baked in, so a retrain is
-picked up without rebuilding.
+jupyter. Neither the model nor the data is baked in, so a retrain is picked up
+without rebuilding.
 
 ```bash
 docker build -t streamflow-api .
-docker run --rm -p 8000:8000 -v "${PWD}/mlruns:/app/mlruns" -v "${PWD}/data:/app/data" streamflow-api
+docker run --rm -p 8000:8000 --env-file .env -v "${PWD}/data:/app/data" streamflow-api
 ```
 
 (one line, and `${PWD}` rather than `$(pwd)`, so it runs in PowerShell as well as bash)
 
+`--env-file` points the container at the tracking server, so it resolves the
+champion the same way every other entry point does. Mounting a local `mlruns`
+instead still works, but it serves whatever that folder happens to hold - which
+is how a container ends up quietly serving a model the registry retired.
+
 Then `curl localhost:8000/health` or open `http://localhost:8000/docs`.
-Run `python -m streamflow.train` at least once first, or there is no model to load.
 
 ## monitoring
 
