@@ -169,14 +169,37 @@ data still ships, a materially worse one never does.
   schema/range violations at the Pydantic boundary, and Evidently catches
   shifts that are valid but wrong (notebooks/05_monitoring)
 
+## data contract
+
+**Provenance requirements.** USGS publishes each daily value with an
+`approval_status` and a `qualifier`, and both are kept per row rather than
+discarded at ingest. They carry the meaning the number alone does not: `Provisional`
+is unreviewed and will be revised, `ICE` and `ESTIMATED` are inferred rather than
+measured, `REVISED` marks a value that already changed. These pass every range and
+schema check - they are valid readings - so validation cannot reject them and the
+monitor treats them as drift evidence instead. Enforced on every run through
+`validate.py`, not asserted here.
+
+**Cost.** Both sources are public, keyless HTTP: a full 82-year rebuild is one
+ingest (~10s, 30,180 rows across two APIs) plus one feature build (48 columns from
+7 lags and 4 rolling windows). No feature store, no streaming, no vendor. The cost
+of a new feature is one function in `features.py` and one re-run, which is why the
+lag/rolling grid is wide rather than hand-picked.
+
+**Privacy.** No personal data enters the system. Streamflow is federal
+public-record data (USGS 05532500) and weather is ERA5 reanalysis; both are
+anonymous, keyless, and redistributable. No credentials are required to rebuild
+the dataset, so nothing sensitive can leak through the repo - the only secret in
+the project is the tracking-server token, which lives in a gitignored `.env`.
+
 ## ci
 
 `.github/workflows/ci.yml` runs ruff and the full suite on every push and PR,
 plus a Docker build so a broken image fails the build rather than the demo.
 
 The suite needs no data, model, network or secrets - fixtures are synthetic and
-the two tests that would need a live API skip themselves - so CI is the same
-command a teammate runs locally (~6 min, 90 passed / 2 skipped).
+the tests that would need a live API or tracking server skip themselves - so CI is
+the same command a teammate runs locally (~7 min, 122 passed / 1 skipped).
 
 There is no deploy job: nothing is deployed to. The deployment step in this
 project is the promotion gate moving the `champion` alias, which is what serving

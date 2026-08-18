@@ -23,7 +23,9 @@ def data_check_task(raw_df):
 def features_task(raw_df):
     return features_build_and_save()
 
-@task(log_prints=True)
+# predict/monitor/train all resolve the champion from the tracking server, so
+# they carry the same retry as ingest: a transient outage should not fail a run.
+@task(retries=2, retry_delay_seconds=30, log_prints=True)
 def predict_task(feature_df, raw_df):
     return predict_next_day(raw_df)
 
@@ -45,13 +47,13 @@ def daily_pipeline():
     print(f"pipeline complete — prediction: {prediction}")
     return {"prediction": prediction, "decision": decision}
 
-@task(log_prints=True)
+@task(retries=2, retry_delay_seconds=30, log_prints=True)
 def monitor_task(prediction):
     """Score, measure drift, decide. Returns the decision; acting on it is the
     flow's job, so detection and action stay separable."""
     return monitor_run()
 
-@task(log_prints=True)
+@task(retries=2, retry_delay_seconds=30, log_prints=True)
 def train_task():
     """Retrain and put the candidate through the promotion gate.
 

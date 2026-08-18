@@ -36,9 +36,15 @@ def load_latest_model():
     mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
     model = registry.load_champion()
     if model is None:
+        # An unreachable or unauthenticated tracking server looks identical to an
+        # empty registry from here, and the two want opposite responses: retrain
+        # vs fix the connection. Name both rather than send the operator to
+        # retrain against a server that will refuse that too.
         raise RuntimeError(
-            f"No '{CHAMPION_ALIAS}' model registered for '{REGISTERED_MODEL}' -- "
-            "run `python -m streamflow.train` first"
+            f"No '{CHAMPION_ALIAS}' model resolved for '{REGISTERED_MODEL}' at "
+            f"{MLFLOW_TRACKING_URI} -- either nothing has been promoted yet "
+            "(run `python -m streamflow.train`) or the tracking server is "
+            "unreachable/unauthenticated"
         )
     version = registry.champion_version()
     run_id = mlflow.tracking.MlflowClient().get_model_version(
