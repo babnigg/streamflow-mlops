@@ -1,12 +1,12 @@
 method: bayesian_optuna
-selected_at: '2026-07-31T23:42:40.384705+00:00'
-best_cv_rmse: 0.2931897172579906
-test_rmse: 0.26139341793266574
+selected_at: '2026-08-18T12:13:16.732569+00:00'
+best_cv_rmse: 0.2851176565235014
+test_rmse: 0.2760259030546081
 params:
-  max_depth: 3
-  min_child_weight: 5
-  subsample: 0.9060585414164009
-  colsample_bytree: 0.8130611589344169
-  reg_lambda: 4.33298189673176
-  learning_rate: 0.06965903808597178
+  max_depth: 5
+  min_child_weight: 4
+  subsample: 0.8087030864743668
+  colsample_bytree: 0.9429564520037396
+  reg_lambda: 11.328722430738196
+  learning_rate: 0.045217007932059974
   n_estimators: 300
