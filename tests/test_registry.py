@@ -186,6 +186,21 @@ def test_rollback_returns_to_the_previous_version(store):
     assert registry.champion_version() == v1
 
 
+def test_a_second_rollback_keeps_going_back(store):
+    """`promoted` is the gate's verdict, not what is deployed, so the version a
+    rollback moved away from still carries it. Without a bound below the current
+    champion, rolling back twice returns to the model we just backed out of."""
+    v1 = _log_version(seed=1)
+    registry.promote(v1)
+    v2 = _log_version(seed=2)
+    registry.promote(v2)
+    v3 = _log_version(seed=3)
+    registry.promote(v3)
+
+    assert registry.rollback() == v2
+    assert registry.rollback() == v1
+
+
 def test_rollback_skips_versions_the_gate_rejected(store):
     """Counting backwards by version number would deploy the model the gate
     just refused - rejected candidates stay registered for audit."""

@@ -11,6 +11,8 @@ even though no search runs here.
 Usage:
     python -m streamflow.train
 """
+import argparse
+
 import numpy as np
 import yaml
 import mlflow
@@ -45,8 +47,8 @@ def load_best_params(path: str = BEST_PARAMS_PATH) -> dict:
         return yaml.safe_load(f)
 
 
-def main():
-    config = load_best_params()
+def main(params_path: str = BEST_PARAMS_PATH):
+    config = load_best_params(params_path)
     params = config["params"]
     print(f"Training with hyperparameters from {config['method']} (selected {config['selected_at']})")
 
@@ -67,6 +69,9 @@ def main():
         mlflow.log_params({"n_train": len(X_train), "n_test": len(X_test),
                            "n_features": len(feature_columns)})
         mlflow.set_tag("tuning_method", config["method"])
+        # which file the hyperparameters came from - two runs with different
+        # params are otherwise indistinguishable in the run record
+        mlflow.log_param("params_source", params_path)
 
         model = xgb.XGBRegressor(
             **params,
@@ -116,4 +121,7 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    ap = argparse.ArgumentParser(description=__doc__)
+    ap.add_argument("--params", default=BEST_PARAMS_PATH,
+                    help="hyperparameter file (default: the tuned best_params.yaml)")
+    main(ap.parse_args().params)

@@ -1,0 +1,19 @@
+# Deliberately crippled hyperparameters - NOT a tuning result.
+#
+# Stands in for a retrain fired on inputs that are valid but wrong: USGS ICE and
+# ESTIMATED qualifiers pass validation, so monitoring can trigger a retrain on
+# data the gate should refuse to ship. Used to prove the promotion gate rejects a
+# losing candidate without waiting for a real bad retrain to happen.
+#
+#   python -m streamflow.train --params config/fault_injection.yaml
+#
+# Committed on purpose. The version this produces is registered for audit and
+# never served, and a candidate whose defining input lives only in someone's
+# shell is not reproducible evidence.
+
+method: fault_injection_crippled_model
+selected_at: '2026-08-18T00:00:00+00:00'
+params:
+  max_depth: 1
+  n_estimators: 2
+  learning_rate: 0.001
