@@ -64,3 +64,8 @@ os.environ.setdefault("MLFLOW_ALLOW_FILE_STORE", "true")
 # Against a server, mlflow prints a run link decorated with an emoji. A Windows
 # console in cp1252 cannot encode it and raises inside mlflow.start_run().
 os.environ.setdefault("MLFLOW_SUPPRESS_PRINTING_URL_TO_STDOUT", "true")
+
+# mlflow otherwise records the names of API-key env vars it finds in the shell
+# into every model's artifacts. Nothing here reads them, and a published model
+# should not carry an inventory of the credentials on the machine that built it.
+os.environ.setdefault("MLFLOW_RECORD_ENV_VARS_IN_MODEL_LOGGING", "false")
