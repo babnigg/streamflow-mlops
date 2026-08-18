@@ -17,6 +17,7 @@ xgboost==2.1.4
 scikit-learn==1.6.1
 optuna==4.9.0
 optuna-integration[mlflow]==4.9.0
+python-dotenv==1.2.3
 
 # serving (stage 3)
 # fastapi floor is set by prefect, which requires >=0.139.0 - pinning the two
