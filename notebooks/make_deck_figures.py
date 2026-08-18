@@ -189,6 +189,60 @@ def fig_rain_response(raw):
     plt.close(fig)
 
 
+def fig_corruption_psi(feats):
+    """Per-column PSI under injected corruption, against the clean control.
+
+    A table of PSI values proves monitoring responds; a chart shows the two
+    things that matter at a glance - the clean window sits under every
+    threshold, and each corruption moves only the column it touched.
+
+    Needs scored predictions: run `python -m streamflow.monitor` first.
+    """
+    from streamflow import monitor
+    from streamflow.monitor import MON
+
+    scored = pd.read_parquet(resolve("data/monitoring/predictions.parquet"))
+    m = monitor.with_predictions(feats, scored)
+    cur = m[m.date > m.date.max() - pd.Timedelta(days=MON["drift_window_days"])]
+    ref = monitor.seasonal_reference(m, cur)
+
+    scenarios = [("clean", None, None),
+                 ("-15 C temp", "tmax_c", lambda s: s - 15),
+                 ("5x rainfall", "precip_mm", lambda s: s * 5),
+                 ("gauge 10x", "streamflow_t", lambda s: s * 10)]
+    rows = []
+    for label, col, fn in scenarios:
+        c2 = cur if col is None else cur.assign(**{col: fn(cur[col])})
+        d = monitor.drift_report(ref, c2)
+        rows.append((label, d["per_column_psi"], d["dataset_drift"]))
+
+    watch = MON["watch_columns"]
+    x, width = np.arange(len(watch)), 0.2
+    fig, ax = plt.subplots(figsize=WIDE)
+    for i, ((label, psi, alarm), colour) in enumerate(zip(rows, [MUTED, TEAL, GOLD, CLAY])):
+        ax.bar(x + (i - 1.5) * width, [psi.get(c, np.nan) for c in watch], width,
+               label=f"{label}{' - alarm' if alarm else ''}", color=colour)
+
+    # thresholds are calibrated per column, so they are marks on each group
+    # rather than one line across the axis
+    for j, c in enumerate(watch):
+        t = MON["psi_thresholds"][c]
+        ax.plot([j - 0.42, j + 0.42], [t, t], color=INK, lw=1.4, ls=(0, (4, 2)),
+                zorder=5, label="threshold" if j == 0 else None)
+
+    ax.set_yscale("log")
+    ax.set_xticks(x)
+    ax.set_xticklabels(watch)
+    ax.set_ylabel("PSI (log scale)")
+    ax.legend(ncol=5, loc="upper center", bbox_to_anchor=(0.5, 1.16))
+    save(fig, "corruption_psi")
+    plt.close(fig)
+
+    for label, psi, alarm in rows:
+        print(f"    {label:<12} alarm={str(alarm):<5} "
+              + " ".join(f"{c}={psi.get(c, float('nan')):.2f}" for c in watch))
+
+
 def main():
     raw, feats = load()
     print(f"raw {len(raw):,} rows  features {len(feats):,} rows")
@@ -199,7 +253,8 @@ def main():
     fig_persistence(feats)
     fig_rain_response(raw)
     fig_target_skew(raw)
-    print("\nmonitoring figures come from notebooks/05_monitoring.ipynb")
+    fig_corruption_psi(feats)
+    print("\nremaining monitoring figures come from notebooks/05_monitoring.ipynb")
 
 
 if __name__ == "__main__":
