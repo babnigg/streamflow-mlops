@@ -45,6 +45,11 @@ EXPERIMENT_TUNE = CONFIG["mlflow"]["experiment_tune"]
 REGISTERED_MODEL = CONFIG["mlflow"]["registered_model"]
 CHAMPION_ALIAS = CONFIG["mlflow"]["champion_alias"]
 
-# We run MLflow on a file store deliberately - no tracking server to stand up.
-# mlflow 3 requires this opt-in to allow that.
+# The local default is a file store, which mlflow 3 requires this opt-in to allow.
+# A tracking server is selected with MLFLOW_TRACKING_URI (see .env.example); the
+# opt-in is simply ignored then.
 os.environ.setdefault("MLFLOW_ALLOW_FILE_STORE", "true")
+
+# Against a server, mlflow prints a run link decorated with an emoji. A Windows
+# console in cp1252 cannot encode it and raises inside mlflow.start_run().
+os.environ.setdefault("MLFLOW_SUPPRESS_PRINTING_URL_TO_STDOUT", "true")

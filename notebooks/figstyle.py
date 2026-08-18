@@ -30,8 +30,13 @@ BROWN = "#806952"      # accent3
 
 FIGDIR = Path(__file__).resolve().parent.parent / "reports" / "figures"
 
-WIDE = (10, 3.6)       # full-width slide figure
-HALF = (7, 3.4)        # half-slide figure
+# Sized against the deck's 10 x 5.625in slide, leaving room for a title. STACK
+# is two panels in the space one WIDE figure would occupy - stacking two WIDE
+# exports instead overflows the slide and never lines up.
+WIDE = (10, 3.6)       # full-width, one panel
+STACK = (10, 4.3)      # full-width, two panels
+HALF = (8, 4.964)      # half-width, tall enough for a categorical axis
+COMPACT = (7.5, 3.4)   # sits beside body text without shrinking to nothing
 
 
 def apply():

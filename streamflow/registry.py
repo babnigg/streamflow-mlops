@@ -157,6 +157,11 @@ def rollback() -> str:
     audit, so counting backwards would deploy the very model the gate refused.
     Deliberately one call rather than a retrain - recovery from a bad promotion
     should not depend on the training pipeline being healthy.
+
+    Only versions below the current champion are eligible. `promoted` records the
+    gate's verdict, not what is deployed, so a version an earlier rollback moved
+    away from still carries it - without the bound, a second rollback rolls
+    forward onto the model we just backed out of.
     """
     client = _client()
     current = champion_version()
@@ -164,7 +169,7 @@ def rollback() -> str:
                       key=lambda v: int(v.version), reverse=True)
 
     for v in versions:
-        if str(v.version) == current:
+        if current is not None and int(v.version) >= int(current):
             continue
         if client.get_run(v.run_id).data.tags.get("promoted") == "true":
             promote(v.version)

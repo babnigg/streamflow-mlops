@@ -80,7 +80,9 @@ prefect deploy --all                    # register the scheduled deployments
 
 ## serving
 
-The API loads the most recent model from MLflow and exposes it over HTTP.
+The API loads the version carrying the MLflow `champion` alias - not the newest
+run - and exposes it over HTTP. A retrain that loses its promotion comparison
+stays registered and never serves.
 
 ```bash
 uvicorn streamflow.serve:app --reload   # http://127.0.0.1:8000/docs
